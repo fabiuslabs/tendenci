@@ -1,3 +1,7 @@
+from django.db import transaction
+
+from tendenci.apps.chapters.forms import ChapterMembershipForm
+from tendenci.apps.memberships.utils import run_membership_export
 from functools import reduce
 import operator
 import os
@@ -11,10 +15,10 @@ import time as ttime
 import subprocess
 import calendar
 from collections import OrderedDict
-from dateutil.parser import parse as dparse, ParserError 
+from dateutil.parser import parse as dparse, ParserError
 from dateutil.relativedelta import relativedelta
 from urllib.parse import urlparse
- 
+
 from django.urls import reverse
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
@@ -34,6 +38,7 @@ from django.utils.translation import gettext_lazy as _
 from django.contrib.contenttypes.models import ContentType
 from django.conf import settings
 from django.urls.resolvers import NoReverseMatch
+from tendenci.apps.memberships import forms
 
 #from geraldo.generators import PDFGenerator
 
@@ -53,7 +58,9 @@ from tendenci.apps.corporate_memberships.models import (CorpMembership,
 from tendenci.apps.exports.utils import render_csv
 from tendenci.apps.perms.utils import get_notice_recipients
 
+
 from tendenci.apps.discounts.models import Discount, DiscountUse
+from tendenci.apps.chapters.models import Chapter, ChapterMembership, ChapterMembershipType, ChapterMembershipApp
 from tendenci.apps.discounts.utils import assign_discount
 from tendenci.apps.profiles.models import Profile
 from tendenci.apps.memberships.models import (
@@ -84,6 +91,7 @@ from tendenci.apps.base.utils import get_next_url
 @login_required
 def memberships_search(request, app_id=0, template_name="memberships/search-per-app.html"):
     app = get_object_or_404(MembershipApp, pk=app_id)
+    print("do I executed on submit?")
     if not has_perm(request.user, 'memberships.change_membershipdefault'):
         raise Http403
 
@@ -105,29 +113,29 @@ def memberships_search(request, app_id=0, template_name="memberships/search-per-
     else:
         form = MemberSearchForm(request.GET, app_fields=app_fields, user=request.user)
     if form.is_valid():
-        user_fieldnames = [field.name for field in User._meta.fields if \
+        user_fieldnames = [field.name for field in User._meta.fields if
                            field.get_internal_type() in ['CharField', 'TextField']]
-        profile_fieldnames = [field.name for field in Profile._meta.fields if \
+        profile_fieldnames = [field.name for field in Profile._meta.fields if
                            field.get_internal_type() in ['CharField', 'TextField']]
-        membership_fieldnames = [field.name for field in MembershipDefault._meta.fields if \
+        membership_fieldnames = [field.name for field in MembershipDefault._meta.fields if
                            field.get_internal_type() in ['CharField', 'TextField']]
-        demographic_fieldnames = [field.name for field in MembershipDemographic._meta.fields if \
+        demographic_fieldnames = [field.name for field in MembershipDemographic._meta.fields if
                            field.get_internal_type() in ['CharField', 'TextField']]
 
         for field_name, field_value in form.cleaned_data.items():
             if field_value:
                 if isinstance(field_value, list):
                     if field_name in user_fieldnames:
-                        memberships = memberships.filter(reduce(operator.or_, 
+                        memberships = memberships.filter(reduce(operator.or_,
                             [Q(**{f'user__{field_name}__icontains': value}) for value in field_value]))
                     elif field_name in profile_fieldnames:
-                        memberships = memberships.filter(reduce(operator.or_, 
+                        memberships = memberships.filter(reduce(operator.or_,
                             [Q(**{f'user__profile__{field_name}__icontains': value}) for value in field_value]))
                     elif field_name in membership_fieldnames:
-                        memberships = memberships.filter(reduce(operator.or_, 
+                        memberships = memberships.filter(reduce(operator.or_,
                             [Q(**{f'{field_name}__icontains': value}) for value in field_value]))
                     elif field_name in demographic_fieldnames:
-                        memberships = memberships.filter(reduce(operator.or_, 
+                        memberships = memberships.filter(reduce(operator.or_,
                             [Q(**{f'user__demographics__{field_name}__icontains': value}) for value in field_value]))
                 elif isinstance(field_value, str):
                     if field_name in user_fieldnames:
@@ -140,10 +148,10 @@ def memberships_search(request, app_id=0, template_name="memberships/search-per-
                         memberships = memberships.filter(Q(**{f'user__demographics__{field_name}__icontains': field_value}))
 
         memberships = memberships.order_by('user__last_name', 'user__first_name')
-    
+
         if 'export' in request.GET:
             EventLog.objects.log(description="memberships export from memberships search")
-    
+
             response = StreamingHttpResponse(
             streaming_content=(iter_memberships(memberships, app_fields)),
             content_type='text/csv',)
@@ -183,7 +191,7 @@ def memberships_search(request, app_id=0, template_name="memberships/search-per-
             retn_content = email_membership_members(email,
                                     memberships,
                                     request=request)
-    
+
             EventLog.objects.log(instance=email)
             return StreamingHttpResponse(streaming_content=retn_content)
 
@@ -229,7 +237,7 @@ def membership_details(request, id=0, template_name="memberships/details.html"):
 
     has_approve_perm = has_perm(request.user, 'memberships.approve_membershipdefault') and \
                 has_perm(request.user, 'memberships.change_membershipdefault')
-    
+
     # allow only superuser, or owner or users with the approve permission to view this page
     if not any((request.user.profile.is_superuser,
             request.user == membership.user,
@@ -298,13 +306,13 @@ def membership_add_directory(request, id):
     membership = get_object_or_404(MembershipDefault, pk=id)
     if not  membership.is_active() or membership.directory:
         raise Http404
-    
+
     if not get_setting('module',  'memberships', 'adddirectory'):
         raise Http404
-    
+
     has_approve_perm = has_perm(request.user, 'memberships.approve_membershipdefault') and \
                 has_perm(request.user, 'memberships.change_membershipdefault')
-                
+
     if request.user.profile.is_superuser or has_approve_perm:
         membership.add_directory()
 
@@ -325,7 +333,7 @@ def message_pending_members(request, email_id=None, form_class=MessageForm, temp
     # Allow only for admin
     if not request.user.profile.is_superuser:
         raise Http403
-    
+
     if email_id:
         email = get_object_or_404(Email, id=email_id)
     else:
@@ -340,7 +348,7 @@ def message_pending_members(request, email_id=None, form_class=MessageForm, temp
             theme_root = get_theme_root()
         default_subject_file_path = os.path.join(theme_root, 'templates', 'memberships/message/pending-members-subject.txt')
         default_body_file_path = os.path.join(theme_root, 'templates', 'memberships/message/pending-members-body.txt')
-        
+
         if os.path.isfile(default_subject_file_path):
             with open(default_subject_file_path) as fp:
                 default_subject = fp.read()
@@ -353,7 +361,7 @@ def message_pending_members(request, email_id=None, form_class=MessageForm, temp
         'body': default_body,
         'sender_display': request.user.get_full_name(),
         'reply_to': request.user.email})
-    
+
     if request.method == "POST":
         if form.is_valid():
             email = form.save()
@@ -390,10 +398,10 @@ def message_pending_members(request, email_id=None, form_class=MessageForm, temp
                 email.body = template.render(context)
                 email.send()
                 email.body = tmp_body
-                
+
                 msg_string = 'Successfully sent email "%s" to myself.' % (subject)
                 messages.add_message(request, messages.SUCCESS, msg_string)
-    
+
                 return HttpResponseRedirect(reverse('membership.message_pending', args=([email.id])))
             else:
                 retn_content = email_pending_members(email, recipient_type=email.recipient_type,
@@ -404,10 +412,8 @@ def message_pending_members(request, email_id=None, form_class=MessageForm, temp
                 EventLog.objects.log(instance=email)
                 return StreamingHttpResponse(streaming_content=retn_content)
 
-
     return render_to_resp(request=request, template_name=template_name,
                           context={'form': form})
-
 
 
 def membership_applications(request, template_name="memberships/applications/list.html"):
@@ -450,7 +456,7 @@ def referer_url(request):
     try:
         return redirect(next_url)
     except NoReverseMatch:
-        raise Http404 
+        raise Http404
 
 
 def application_detail_default(request, **kwargs):
@@ -497,6 +503,7 @@ def application_detail_default(request, **kwargs):
     else:
 
         # create default form
+        print("else")
         form = MembershipDefaultForm(request=request)
 
     # show application
@@ -681,22 +688,22 @@ def membership_default_import_preview(request, mimport_id,
             for f in ['join_dt', 'expire_dt', 'membership_type']:
                 if f in idata.row_data:
                     user_display[f] = idata.row_data[f]
-            
+
             users_list.append(user_display)
             if not fieldnames:
                 fieldnames = list(idata.row_data.keys())
 
         # DateTime fields are sensitive to parse failures
-        # They are not parsed in the preview yet, in fact all 
-        # data travens as strings to be cleaned and parsd just 
-        # before being saved to the respecive models. Datetimes 
+        # They are not parsed in the preview yet, in fact all
+        # data travens as strings to be cleaned and parsd just
+        # before being saved to the respecive models. Datetimes
         # and dates are parsed with dateutil.parser, so we fo
         # that here specifically so that someone importing dates
-        # sees a preview of the parse success/failure before 
+        # sees a preview of the parse success/failure before
         # committing.
         #
-        # We elect join_dt and expire_dt as the two most likely 
-        # dates of interest to someone importing members en 
+        # We elect join_dt and expire_dt as the two most likely
+        # dates of interest to someone importing members en
         # masse.
         for dt in ['join_dt', 'expire_dt']:
             if dt in fieldnames:
@@ -709,8 +716,8 @@ def membership_default_import_preview(request, mimport_id,
                     else:
                         u[dt] = "None"
 
-        # Similarly membership_type if imported must be 
-        # imported as the id of a membership_type and it's 
+        # Similarly membership_type if imported must be
+        # imported as the id of a membership_type and it's
         # useful to get feedback on integrity at the preview
         # before committing the import.
         # TODO: This could generalize to all ID type imports supported
@@ -741,8 +748,8 @@ def membership_default_import_preview(request, mimport_id,
             })
     else:
         if mimport.status in ('processing', 'completed'):
-                return redirect(reverse('memberships.default_import_status',
-                                     args=[mimport.id]))
+            return redirect(reverse('memberships.default_import_status',
+                                 args=[mimport.id]))
         else:
             if mimport.status == 'not_started':
                 subprocess.Popen([python_executable(), "manage.py",
@@ -886,7 +893,7 @@ def download_default_template(request):
         title_list.remove('sig_user_group_ids')
     # replace user field with fields in auth_user and profile
     title_list.remove('user')
-    title_list = ['first_name', 'last_name', 'username', 'account_id', 'email', 'email2',
+    title_list = ['first_name', 'last_name', 'username', 'email', 'email2',
                   'phone', 'salutation', 'company',
                   'position_title', 'sex',  'address',
                   'address2', 'city', 'state',
@@ -912,7 +919,6 @@ def download_default_template(request):
     return render_csv(filename, title_list,
                         data_row_list)
 
-from tendenci.apps.memberships.utils import run_membership_export
 @login_required
 @password_required
 def membership_default_export(
@@ -944,7 +950,7 @@ def membership_default_export(
             export_status_detail = form.cleaned_data['export_status_detail']
 
             identifier = int(ttime.time())
-            run_membership_export(request, 
+            run_membership_export(request,
                           identifier=identifier,
                           export_fields=export_fields,
                           export_type=export_type,
@@ -1148,11 +1154,9 @@ def membership_default_add_legacy(request):
 @is_enabled('memberships')
 def membership_default_add(request, slug='', membership_id=None,
                            template='memberships/applications/add.html', **kwargs):
-    """
-    Default membership application form.
-    """
-    from tendenci.apps.memberships.models import Notice
+    chapters = Chapter.objects.filter(status=True, status_detail='active').values('id', 'title', 'state').order_by('title')
 
+    from tendenci.apps.memberships.models import Notice
     user = None
     membership = None
     renewed_corp = None
@@ -1164,7 +1168,6 @@ def membership_default_add(request, slug='', membership_id=None,
     cm_id = kwargs.get('cm_id', None)
 
     if membership_id:
-        # it's renewal - make sure they are logged in
         redirect_url = reverse('auth_login') + '?next='
         if not request.user.is_authenticated:
             if join_under_corporate and cm_id:
@@ -1184,7 +1187,7 @@ def membership_default_add(request, slug='', membership_id=None,
         membership_type_id = int(membership_type_id)
     else:
         membership_type_id = 0
-    
+
     corp_membership = None
     is_corp_rep = False
 
@@ -1442,13 +1445,32 @@ def membership_default_add(request, slug='', membership_id=None,
     if request.user.is_authenticated or not app.use_captcha:
         del captcha_form.fields['captcha']
 
-    if 'discount_code' in membership_form.fields and (not app.discount_eligible or
-        not Discount.has_valid_discount(model=MembershipSet._meta.model_name)):
+    if 'discount_code' in membership_form.fields and (not app.discount_eligible
+        or not Discount.has_valid_discount(model=MembershipSet._meta.model_name)):
         del membership_form.fields['discount_code']
+
+    chapter = None
+    chapter_membership_form = None
+    chapter_app_fields = None
 
     if request.method == 'POST':
         membership_types = request.POST.getlist('membership_type')
         post_values = request.POST.copy()
+
+        if post_values.get('chapter'):
+            chapter = get_object_or_404(Chapter, id=post_values['chapter'])
+            chapter_app = ChapterMembershipApp.objects.current_app()
+            chapter_app_fields = chapter_app.get_app_fields(chapter, request.user)
+            chapter_params = {
+                'request_user': request.user,
+                'is_renewal': False,
+                'edit_mode': False,
+                'app': chapter_app,
+            }
+            chapter_membership_form = ChapterMembershipForm(chapter_app_fields, chapter,
+                                                            request.POST or None, request.FILES or None,
+                                                            prefix='chapter', **chapter_params)
+
         memberships = []
         amount_list = []
         for membership_type in membership_types:
@@ -1463,8 +1485,11 @@ def membership_default_add(request, slug='', membership_id=None,
                 education_form.is_valid(),
                 demographics_form.is_valid(),
                 membership_form2.is_valid(),
-                captcha_form.is_valid()
+                captcha_form.is_valid(),
             )
+
+            if post_values.get('chapter'):
+                forms_validate = forms_validate + (chapter_membership_form.is_valid(),)
 
             # form is valid
             if all(forms_validate):
@@ -1500,7 +1525,6 @@ def membership_default_add(request, slug='', membership_id=None,
                 amount_list.append(membership.membership_type.price)
 
         if memberships:
-
             membership_set = MembershipSet()
             invoice = membership_set.save_invoice(memberships, app)
             invoice.entity = memberships[0].entity
@@ -1549,7 +1573,6 @@ def membership_default_add(request, slug='', membership_id=None,
                     invoice.total -= auto_renew_discount
                     invoice.balance -= auto_renew_discount
                     invoice.save()
-                    
 
             memberships_join_notified = []
             memberships_renewal_notified = []
@@ -1654,11 +1677,89 @@ def membership_default_add(request, slug='', membership_id=None,
                     recipients,
                     extra_context)
 
-            # redirect: confirmation page
-            return HttpResponseRedirect(reverse(
-                'membership.application_confirmation_default',
-                args=[memberships[0].guid]
-            ))
+            if post_values.get('chapter'):
+                chapter_params = {
+                    'request_user': customer,
+                    'is_renewal': False,
+                    'edit_mode': False,
+                    'app': chapter_app,
+                }
+                chapter_membership_form = ChapterMembershipForm(chapter_app_fields, chapter,
+                                                                request.POST or None, request.FILES or None,
+                                                                prefix='chapter', **chapter_params)
+
+                # below chapter membership signup workflow is copied from and the same as chapter_membership_add view of chapters app
+                if chapter_membership_form.is_valid():
+                    # create a chapter membership
+                    chapter_membership = chapter_membership_form.save()
+                    # create an invoice
+                    chapter_membership.save_invoice()
+
+                    if chapter_membership.approval_required():
+                        # approval is required - set pending
+                        chapter_membership.pend()
+                        chapter_membership.save()
+
+                    # send notification to user
+                    chapter_membership.send_email(notice_type='apply')
+
+                    if not chapter_membership.approval_required():
+                        # not require approval - approve it!
+                        chapter_membership.approve(request_user=request.user)
+
+                    # add user to the newsletter group, if any
+                    if chapter.newsletter_group:
+                        chapter.newsletter_group.add_user(chapter_membership.user)
+
+                    # log an event
+                    EventLog.objects.log(instance=chapter_membership)
+
+                    # TODO: email notification to admin
+                    # Who should be notified? site admin or chapter leaders?
+                    if chapter.contact_email:
+                        recipients = chapter.contact_email.split(',')
+                        recipients = [email.strip() for email in recipients if email]
+                    else:
+                        recipients = get_notice_recipients(
+                            'module', 'chapters',
+                            'chapterrecipients')
+                    if recipients:
+                        send_email_notification(
+                            'chapter_membership_joined_to_admin',
+                            recipients,
+                            {'chapter_membership': chapter_membership,
+                             'app': app,
+                             'request': request
+                             })
+
+                    # handle online payment
+                    if chapter_membership.payment_method.is_online and \
+                            chapter_membership.invoice.balance > 0:
+                        if chapter_membership.use_third_party_payment:
+                            # if chapter uses third party payment, redirect them to the external payment link
+                            if chapter_membership.external_payment_link:
+                                return HttpResponseRedirect(chapter_membership.external_payment_link)
+                            # no external payment link set up, redirect to the conf page with the message
+                            messages.add_message(request, messages.WARNING,
+                                                 _("Payment not set up yet for the chapter. Please contact the chapter to complete the payment process."))
+                            return HttpResponseRedirect(reverse('chapters.membership_add_conf',
+                                                                args=[chapter_membership.id]))
+                        # chapter does not use third party payment, redirect to online paymemt as normal
+                        return HttpResponseRedirect(
+                            reverse('payment.pay_online',
+                                    args=[chapter_membership.invoice.id,
+                                          chapter_membership.invoice.guid]))
+                    else:
+                        return HttpResponseRedirect(reverse(
+                            'membership.application_confirmation_default',
+                            args=[memberships[0].guid]
+                        ))
+            else:
+                # redirect: confirmation page
+                return HttpResponseRedirect(reverse(
+                    'membership.application_confirmation_default',
+                    args=[memberships[0].guid]
+                ))
 
     context = {
         'app': app,
@@ -1670,6 +1771,10 @@ def membership_default_add(request, slug='', membership_id=None,
         'membership_form': membership_form,
         'captcha_form': captcha_form,
         'is_edit': False,
+        'chapters': chapters,
+        'sel_chapter': chapter,
+        'chapter_membership_form': chapter_membership_form,
+        'chapter_app_fields': chapter_app_fields,
     }
     return render_to_resp(request=request, template_name=template, context=context)
 
@@ -2252,14 +2357,14 @@ def report_active_members(request, template_name='reports/membership_list.html')
     elif sort == '-expiration':
         mems = mems.order_by('-expire_dt')
         is_ascending_expiration = True
-    # COMMENT OUT THIS INVOICE SORTING - because it is a very resource intensive 
+    # COMMENT OUT THIS INVOICE SORTING - because it is a very resource intensive
     # operation and easily to cause timeout with large volume of memberships.
 #     elif sort == 'invoice':
 #         # since we need to sort by a related field with the proper
 #         # conditions we'll need to bring the sorting to the python level
 #         mems = sorted(mems, key=lambda mem: mem.get_invoice(), reverse=True)
 #         is_ascending_invoice = False
-# 
+#
 #     elif sort == '-invoice':
 #         # since we need to sort by a related field with the proper
 #         # conditions we'll need to bring the sorting to the python level
@@ -2283,15 +2388,15 @@ def report_active_members(request, template_name='reports/membership_list.html')
             ]
 
             writer = csv.DictWriter(Echo(), fieldnames=header_row)
-            
+
             yield writer.writerow(dict(zip(header_row, header_row)))
-                
+
             for mem in mems:
-    
+
                 invoice_pk = ''
                 if mem.get_invoice():
                     invoice_pk = '%i' % mem.get_invoice().pk
-    
+
                 mem_row = [
                     mem.user.username,
                     mem.user.get_full_name(),
@@ -2547,8 +2652,8 @@ def report_members_by_company(request, template_name='reports/members_by_company
     """ Total current members by company.
     """
     company_list = Profile.objects.exclude(
-                                Q(member_number='') |
-                                Q(company='')).values_list(
+                                Q(member_number='')
+                                | Q(company='')).values_list(
                                 'company',
                                 flat=True
                                 ).distinct().order_by('company')

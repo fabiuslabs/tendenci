@@ -532,6 +532,24 @@
 },
 {
     "fields": {
+        "color_set": 45,
+        "name": "Chapter Meeting",
+        "slug": "chapter-meeting"
+    },
+    "model": "events.type",
+    "pk": 11
+},
+{
+    "fields": {
+        "color_set": 45,
+        "name": "Committee Meeting",
+        "slug": "committee-meeting"
+    },
+    "model": "events.type",
+    "pk": 12
+},
+{
+    "fields": {
         "city": "",
         "name": "",
         "zip": "",

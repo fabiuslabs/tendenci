@@ -1,4 +1,7 @@
 from django.template import Library
+
+from tendenci.apps.events.models import Volunteer
+
 register = Library()
 
 @register.filter
@@ -24,3 +27,12 @@ def is_registrant(event, user):
         return user.registrant_set.filter(
             registration__event=event).exists()
     return False
+
+@register.filter
+def is_volunteer(event, user):
+    """
+    Check if this user is a volunteer of this event.
+    """
+    if not event or not user or user.is_anonymous:
+        return False
+    return Volunteer.objects.filter(event=event, user=user).exists()

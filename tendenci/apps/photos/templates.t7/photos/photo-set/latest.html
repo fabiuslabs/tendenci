@@ -1,0 +1,94 @@
+{% extends "photos/base-wide.html" %}
+
+{% load bootstrap_pagination_tags %}
+{% load photo_tags %}
+{% load search_tags %}
+{% load humanize %}
+
+{% block title %}{% blocktrans %}Latest Photo Sets{% endblocktrans %}{% endblock %}
+{% block extra_head %}
+{{ block.super }}
+<link rel="stylesheet" type="text/css" href="{% static 'css/photos.css' %}">
+<link rel="stylesheet" type="text/css" href="{% static 'css/photos-photo-set.css' %}">
+<link rel="alternate" type="application/rss+xml" title="Latest photo albums" href="{% url "photo.feed.latest-albums" %}" />
+{% endblock %}
+
+{% block content %}
+  
+  <div id="photo-sets-header-wrap">
+    
+    <div class="page-header">
+      <h1>{{ MODULE_PHOTOS_LABEL }}</h1>
+    </div>
+    
+  </div><!-- photo-sets-header-wrap -->
+  
+  {% photo_set_search %}
+  
+  <span><em>{{ photo_sets|length }} {% trans 'Photo Sets' %} {% trans "Found" %}</em></span>
+  
+  {% autopaginate photo_sets 20 %}
+  
+  <br />
+
+  <!-- photo-sets masonry -->
+  {% if photo_sets %}
+  
+  <div class="container-fluid">
+    <div class="row">
+    	<div class="{% if photo_cats %}col-md-9{% else %}col-md-12{% endif %}">
+		    <div class="grid">
+		      
+		      <div class="grid-sizer col-xs-12"></div>
+		      
+		      {% for photo_set in photo_sets %}
+		   
+		      <div class="grid-item col-md-4 col-sm-4 col-xs-4">
+		        {% search_result photo_set %}
+		      </div>
+		      
+		      {% endfor %}
+		      
+		    </div>
+		    
+		    {% paginate %}
+	    </div>
+	    {% if photo_cats %}
+	    <div class="col-md-3">
+	    	<h3>{% trans 'Browse Photos' %}</h3>
+	    	<ul style="list-style-type: none;">
+	    	{% for cat in photo_cats %}
+	    		{% if cat.slug %}
+	    	   <li>
+	    	       <a href="{% url "photos_in_category" cat.slug %}">{{ cat.name }} ({{ cat.photo_count }})</a>
+	    	   </li>
+	    	    {% endif %}
+	    	{% endfor %}
+	        </ul>
+	    </div>
+	    {% endif %}
+	</div>
+  </div>
+  {% endif %}
+  <!-- end: photo-sets masonry -->
+{% endblock %}
+
+{% block extra_body %}
+    {{ block.super }}
+    
+<script type="text/javascript">
+  // photo: delete confirmation
+  $('.photo-set .info .actions .delete-set').on("click", function(){
+  var delete_photo = confirm('{% trans "Permenantly delete photo set?" %}'); // confirm
+  if(!delete_photo) return false; // do not delete
+  });
+</script>
+<script>
+/*   $('.grid').masonry({
+  itemSelector: '.grid-item',
+  columnWidth: '.grid-sizer',
+  percentPosition: true
+  }); */
+</script>
+
+{% endblock %}

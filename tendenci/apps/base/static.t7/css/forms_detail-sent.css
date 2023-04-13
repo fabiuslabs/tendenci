@@ -1,1 +1,4 @@
-../../../../themes/t7-base/static/css/forms_detail-sent.css
+body {font-family:sans-serif; padding:1em 2em;}
+p {width:50em;}
+label {display:block; float:left; width:10em;}
+.errorlist {color:#f00;}

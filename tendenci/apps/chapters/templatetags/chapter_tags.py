@@ -78,8 +78,24 @@ def chapter_form(context, form, formset=None):
     })
     return context
 
+@register.inclusion_tag("chapters/edit_form.html", takes_context=True)
+def chapter_edit_form(context, form, officer_formset=None, field_formset=None):
+    context.update({
+        'form': form,
+        'officer_formset': officer_formset,
+        'field_formset': field_formset
+    })
+    return context
+
 @register.inclusion_tag("chapters/officer-formset.html", takes_context=True)
-def chapter_officer_formset(context, formset):
+def chapter_officer_formset(context, officer_formset):
+    context.update({
+        'formset': officer_formset
+    })
+    return context
+
+@register.inclusion_tag("chapters/field-formset.html", takes_context=True)
+def chapter_field_formset(context, formset):
     context.update({
         'formset': formset
     })

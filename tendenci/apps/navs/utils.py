@@ -10,16 +10,20 @@ def get_pre_key(is_site_map=False):
         return 'site_map'
     return NAV_PRE_KEY
 
-def cache_nav(nav, show_title=False, is_site_map=False):
+def cache_nav(nav, show_title=False, is_site_map=False, logged_in=False):
     """
     Caches a nav's rendered html code
     """
-    keys = [settings.CACHE_PRE_KEY, get_pre_key(is_site_map), str(nav.id)]
+    keys = [settings.CACHE_PRE_KEY, get_pre_key(is_site_map), str(nav.id), str(int(logged_in))]
     key = '.'.join(keys)
-    value = render_to_string(template_name="navs/render_nav.html",
-                        context={'nav':nav,
-                         "show_title": show_title,
-                         'is_site_map': is_site_map})
+    value = render_to_string(
+        template_name="navs/render_nav.html",
+        context={
+            'nav':nav,
+            "show_title": show_title,
+            'is_site_map': is_site_map,
+            'logged_in': logged_in,
+        })
     cache.set(key, value, 432000) #5 days
     return value
 

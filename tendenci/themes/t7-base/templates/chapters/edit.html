@@ -3,7 +3,7 @@
 {% load perm_tags %}
 {% load styled_forms %}
 
-{% block title %}{% firstof MODULE_CHAPTERS_LABEL 'Chapter' %} Edit{% endblock %}
+{% block title %}{% firstof MODULE_COMMITTEES_LABEL 'Chapter' %} Edit{% endblock %}
 
 {% block extra_head %}
 {{ block.super }}
@@ -14,9 +14,9 @@
 {% block content %}
 
 <div class="t">
-    <h1>{% firstof MODULE_CHAPTERS_LABEL 'Chapter' %} {% trans "Edit" %}</h1>
+    <h1>{% firstof MODULE_COMMITTEES_LABEL 'Chapter' %} {% trans "Edit" %}</h1>
     <form class="form-horizontal" action="{% url "chapters.edit" chapter.pk %}" method="post" enctype="multipart/form-data">{% csrf_token %}
-         {% chapter_form form formset %}
+         {% chapter_edit_form form officer_formset field_formset %}
 
         <fieldset class="boxy-grey" >
                   <legend id="category-title" style="cursor: pointer"><span>+</span> {% trans "Category" %}</legend>

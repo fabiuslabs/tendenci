@@ -1,17 +1,19 @@
+from datetime import datetime, time, timedelta, date
 from django.contrib.auth.decorators import login_required
+from django.db.models import Sum
 from django.urls import reverse
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import User
 
 from tendenci.apps.theme.shortcuts import themed_response as render_to_resp
-from tendenci.apps.donations.forms import DonationForm
+from tendenci.apps.donations.forms import DonationForm, DonationSearchForm
 from tendenci.apps.donations.utils import donation_inv_add, donation_email_user
-from tendenci.apps.donations.models import Donation
+from tendenci.apps.donations.models import Donation, Transaction
 from tendenci.apps.site_settings.utils import get_setting
 from tendenci.apps.base.forms import CaptchaForm
 from tendenci.apps.base.http import Http403
-from tendenci.apps.base.utils import tcurrency
+from tendenci.apps.base.utils import tcurrency, is_chapter_chair
 from tendenci.apps.event_logs.models import EventLog
 from tendenci.apps.perms.utils import get_notice_recipients
 from tendenci.apps.perms.utils import has_perm
@@ -84,7 +86,6 @@ def add(request, form_class=DonationForm, template_name="donations/add.html"):
                 profile = Profile.objects.create(**profile_kwarg)
                 profile.save()
 
-            donation.user = user
             donation.save(user)
 
             # create invoice
@@ -172,13 +173,94 @@ def receipt(request, id, guid, template_name="donations/receipt.html"):
 
 @login_required
 def search(request, template_name="donations/search.html"):
-    query = request.GET.get('q', None)
-    if get_setting('site', 'global', 'searchindex') and query:
-        donations = Donation.objects.search(query)
+    form = DonationSearchForm(request.GET)
+    if form.is_valid():
+        start_dt = form.cleaned_data.get('start_dt')
+        end_dt = form.cleaned_data.get('end_dt')
+        entity = form.cleaned_data.get('entity')
+        default_membership = form.cleaned_data.get('default_membership')
+        chapter_membership = form.cleaned_data.get('chapter_membership')
+        start_amount = form.cleaned_data.get('start_amount')
+        end_amount = form.cleaned_data.get('end_amount')
+        search_criteria = form.cleaned_data.get('search_criteria')
+        search_text = form.cleaned_data.get('search_text')
+        search_method = form.cleaned_data.get('search_method')
+
+    donations = Transaction.objects.all()
+
+    if start_dt:
+        donations = donations.filter(donation_dt__gte=datetime.combine(start_dt, time.min))
+    if end_dt:
+        donations = donations.filter(donation_dt__lte=datetime.combine(end_dt, time.max))
+
+    if entity:
+        donations = donations.filter(donate_to_entity=entity)
+
+    if default_membership:
+        donations = donations.filter(user__membershipdefault__membership_type=default_membership)
+
+    if chapter_membership:
+        donations = donations.filter(user__chaptermembership__chapter=chapter_membership)
+
+    if start_amount:
+        donations = donations.filter(donation_amount__gte=start_amount)
+    if end_amount:
+        donations = donations.filter(donation_amount__lte=end_amount)
+
+    if search_criteria and search_text:
+        if search_method == 'starts_with':
+            if isinstance(search_text, str):
+                search_type = '__istartswith'
+            else:
+                search_type = '__startswith'
+        elif search_method == 'contains':
+            if isinstance(search_text, str):
+                search_type = '__icontains'
+            else:
+                search_type = '__contains'
+        else:
+            if isinstance(search_text, str):
+                search_type = '__iexact'
+            else:
+                search_type = '__exact'
+
+        search_filter = {'%s%s' % (search_criteria, search_type): search_text}
+        donations = donations.filter(**search_filter)
+
+    if request.user.profile.is_superuser or has_perm(request.user, 'donations.view_donation'):
+        donations = donations.order_by('-donation_dt')
+    elif is_chapter_chair(request.user):
+        chapter_ids = request.user.chapters_officer_user.filter(position__title='Chapter Chair').values_list('chapter', flat=True)
+        donations = donations.filter(donate_to_entity__chapter__in=chapter_ids).order_by('-donation_dt')
     else:
-        donations = Donation.objects.all()
+        donations = donations.filter(user=request.user).order_by('-donation_dt')
+
+    total_amount = donations.aggregate(Sum('donation_amount'))['donation_amount__sum'] or 0
+
+    total_amount_by_donate_to_entity = donations.values('donate_to_entity__entity_name').annotate(sum=Sum('donation_amount')).order_by('-sum')
+    total_amount_by_default_membership = donations.values('user__membershipdefault__membership_type__name').annotate(sum=Sum('donation_amount')).order_by('-sum')
+    total_amount_by_chapter_membership = donations.values('user__chaptermembership__chapter__title').annotate(sum=Sum('donation_amount')).order_by('-sum')
+
+    total_amount_by_donate_to_entity_d = {}
+    total_amount_by_membership_d = {}
+
+    for item in total_amount_by_donate_to_entity:
+        if item['sum']:
+            total_amount_by_donate_to_entity_d[item['donate_to_entity__entity_name'] or 'unknown'] = [item['sum'], '{0:.2%}'.format(item['sum'] / total_amount)]
+
+    for item in total_amount_by_default_membership:
+        if item['sum']:
+            total_amount_by_membership_d[item['user__membershipdefault__membership_type__name'] or 'Anonymous'] = [item['sum'], '{0:.2%}'.format(item['sum'] / total_amount)]
+    for item in total_amount_by_chapter_membership:
+        if item['sum']:
+            total_amount_by_membership_d[item['user__chaptermembership__chapter__title'] or 'Anonymous'] = [item['sum'], '{0:.2%}'.format(item['sum'] / total_amount)]
 
     EventLog.objects.log()
 
-    return render_to_resp(request=request, template_name=template_name,
-        context={'donations':donations})
+    return render_to_resp(request=request, template_name=template_name, context={
+        'donations': donations,
+        'form': form,
+        'total_amount': total_amount,
+        'total_amount_by_donate_to_entity_d': total_amount_by_donate_to_entity_d,
+        'total_amount_by_membership_d': total_amount_by_membership_d,
+    })

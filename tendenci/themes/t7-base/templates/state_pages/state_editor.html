@@ -1,0 +1,60 @@
+{% extends "state_pages/base.html" %}
+{% load base_tags %}
+{% load state_page_tags %}
+{% load styled_forms %}
+
+{% block title %}State Editor Assignment Admin{% endblock %}
+
+{% block content %}
+    <div id="page-edit">
+        <div class="row">
+            <div style="border:1px dashed gray; padding: 12px 32px; margin: 12px 8px;">
+                <div class="page-header">
+                    <h1>State Editor Assignment Admin</h1>
+                </div>
+
+                <div class="page-wrap">
+                    <form action="{% url "state_assign" %}" class="form-horizontal" method="post"
+                          enctype="multipart/form-data">
+                        {% csrf_token %}
+
+                        <div class="form-group" style="overflow: visible">
+                            {{ form | styled_form }}
+                            <div style="width: 25%; text-align: right;">
+                                <input class="btn btn-primary" type="submit" value="Submit"/>
+                            </div>
+                        </div>
+
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="page-header">
+                <h1>State Page Editor Assignments</h1>
+                {% if assignments %}
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th>Edit</th>
+                            <th>State</th>
+                            <th>User</th>
+                        </tr>
+                        {% for assignment in assignments %}
+                            <tr>
+                                <td>
+                                    <a href="{% url 'state_assign' %}?id={{ assignment.id }}">Edit</a>
+                                </td>
+                                <td>{{ assignment.state }}</td>
+                                <td>{{ assignment.name }}</td>
+                            </tr>
+                        {% endfor %}
+                        </thead>
+                    </table>
+                {% else %}
+                    <i>No State Page Editors assigned.</i>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+{% endblock %}

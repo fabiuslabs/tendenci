@@ -1,1 +1,9 @@
-../../../../themes/t7-base/static/css/resumes-print.css
+body {
+    background-color: #EEE;
+}
+
+@media print {
+    #admin-bar {
+        display: none;
+    }
+}

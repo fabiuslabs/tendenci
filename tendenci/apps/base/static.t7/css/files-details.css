@@ -1,1 +1,6 @@
-../../../../themes/t7-base/static/css/files-details.css
+.t h2 {
+	margin-bottom: 0;
+}
+.t .file {
+	margin-bottom: 10px;
+}

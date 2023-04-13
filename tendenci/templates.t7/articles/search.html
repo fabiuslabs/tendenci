@@ -1,0 +1,118 @@
+{% extends base_template %}
+{% load article_tags %}
+{% load base_tags %}
+{% load bootstrap_pagination_tags %}
+{% load search_tags %}
+
+
+{% block title %}{% spaceless %}
+    {% if MODULE_ARTICLES_LABEL_PLURAL %}
+        {% blocktrans %}{{ MODULE_ARTICLES_LABEL_PLURAL }} List{% endblocktrans %}
+    {% else %}
+        {% trans "Articles List" %}
+    {% endif %} - {{ block.super }}
+{% endspaceless %}{% endblock %}
+{% block meta_canonical_url %}<link rel="canonical" href="{{ SITE_GLOBAL_SITEURL }}{% url 'articles' %}" />{% endblock %}
+
+{% block extra_head %}
+    {{ block.super }}
+    <link rel="stylesheet" href="//ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/smoothness/jquery-ui.css">
+    <link rel="alternate" type="application/rss+xml" title="{% trans 'Latest' %} {% firstof MODULE_ARTICLES_LABEL_PLURAL 'Articles' %}" href="{% url 'article.feed' %}" />
+{% endblock %}
+
+{% block content_classes %}{{ block.super }} t-search-view{% endblock %}
+
+{% block content %}
+
+{% if header_image_url %}
+<div class="page-header" style="position: relative; color: white;">
+  <img src="{{ header_image_url }}" alt="{% firstof trans MODULE_ARTICLES_LABEL_PLURAL 'Articles' %}" style="width:100%;">
+  <h1 style="position: absolute; top: 40%; left: 20%; transform: translate(-50%, -50%);">{% firstof trans MODULE_ARTICLES_LABEL_PLURAL 'Articles' %}</h1>
+</div>
+{% else %}
+<div class="page-header">
+  <h1>{% firstof trans MODULE_ARTICLES_LABEL_PLURAL 'Articles' %}</h1>
+</div>
+{% endif %}
+
+    {% autopaginate articles num_per_page %}
+    {% article_search %}
+    
+        <em>
+        	{% with obj_count=paginator.count pluralize=paginator.count|pluralize  %}
+        		{% if MODULE_ARTICLES_LABEL and MODULE_ARTICLES_LABEL_PLURAL %}
+        			{%  if obj_count == 1 %}
+        				{% blocktrans %}{{ obj_count }} {{ MODULE_ARTICLES_LABEL }} Found{% endblocktrans %}
+        			{% else %}
+        				{% blocktrans %}{{ obj_count }} {{ MODULE_ARTICLES_LABEL_PLURAL }} Found{% endblocktrans %}
+        			{% endif %}
+        		{% else %}
+	                {% blocktrans %}{{ obj_count }} Article{{ pluralize }} Found{% endblocktrans %}
+            	{% endif %}
+        	{% endwith %}
+        </em> 
+   <br /><br />
+
+{% if MODULE_ARTICLES_GRIDVIEW_FOR_SEARCH %}
+		 <table class="table table-striped table-bordered">
+		 <tr>
+			 <th>{% trans "Date" %}</th>
+			 <th>{% trans "Title" %}</th>
+			 <th>{% trans "Category" %}</th>
+			 <th>{% trans "Subcategory" %}</th>
+			 <th>{% trans "Group" %}</th>
+		 </tr>
+		 {% for article in articles %}
+			<tr>
+				<td nowrap>{{ article.release_dt|date }}</td>
+				<td><a href="{% url 'article' article.slug %}">{{ article.headline }}</a>
+				 {% if user.profile.is_superuser %}
+				 &nbsp;&nbsp;<a class="t-meta-edit-link" href="{% url 'article.edit' article.pk %}" title="Edit"><span class="glyphicon glyphicon-edit"></span></a>
+				  {% endif %}
+				</td>
+				
+				{% with article.category_set as article_cat %}
+				<td>
+				   {% if article_cat.category %}
+				      <a href="{% url 'articles' %}?category={{ article_cat.category }}">{{ article_cat.category }}</a>
+				   {% endif %}
+				</td>
+				<td>
+			       {% if article_cat.sub_category %}
+			       <a href="{% url 'articles' %}?sub_category={{ article_cat.sub_category }}">{{ article_cat.sub_category }}</a>
+			       {% endif %}
+				</td>
+			   {% endwith %}
+				
+			<td>{{ article.group }}</td>
+		</tr>
+	 {% endfor %}
+		 </table>
+{% else %}
+    <section>
+        {% for article in articles %}
+            {% search_result article %}
+        {% empty %}
+            {% if user.profile.is_superuser %}
+                <p><a href="{% url 'article.add' %}">
+                    {% if MODULE_ARTICLES_LABEL %}
+                        {% blocktrans %}
+                            Add a New {{ MODULE_ARTICLES_LABEL }}
+                        {% endblocktrans %}
+                    {% else %}
+                        {% trans "Add a New Article" %}
+                    {% endif %}
+                </a></p>
+            {% endif %}
+        {% endfor %}
+    </section>
+{% endif %}
+
+    {% paginate %}
+{% endblock %}
+
+{% block extra_body %}
+    {{ block.super }}
+    <script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+    <script type="text/javascript" src="{% static 'js/articles.js' %}"></script>
+{% endblock %}

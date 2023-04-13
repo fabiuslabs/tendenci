@@ -1,0 +1,46 @@
+{% load base_filters %}
+
+<div class="chapter-fields">
+    <div class="id_fields">
+        <div class="label">
+            <label for="field-table">FIELDS</label>
+        </div>
+        <div class="field">
+            <table id="field-table">
+        {% for field_form in formset.forms %}
+            {% if forloop.first %}
+            <thead>
+                <tr>
+                    <th>{% translate "Edit" %}</th>
+                    {% for field in field_form.visible_fields %}
+                    <th class="field-{{ field.label|lower }}">{{ field.label|capfirst }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+
+            <tbody>
+            {% endif %}
+                <tr class="dynamic-form">
+                <td><a href="{% url "chapters.edit_app_field" field_form.instance.id %}">{% translate "Edit" %}</a></td>
+                {% for field in field_form.visible_fields %}
+                    <td class="field-{{ field.label|lower }}">
+                    {% if forloop.first %}
+                        {% for hidden in field_form.hidden_fields %}
+                            {{ hidden }}
+                        {% endfor %}
+                    {% endif %}
+                        {{ field.errors.as_ul }}
+                        {{ field }}
+                     </td>
+                {% endfor %}
+                </tr>
+
+                {% if forloop.last %}
+            </tbody>
+                {% endif %}
+        {% endfor %}
+        </table>
+        {{ formset.management_form }}
+        </div>
+    </div>
+</div>

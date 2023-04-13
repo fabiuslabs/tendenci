@@ -178,6 +178,14 @@
                                                     </li>
                                                 {% endif %}
 
+                                                {% if MODULE_STATE_PAGES_ENABLED and USER_IS_STATE_EDITOR %}
+                                                    <li class="content-item">
+                                                        <a href="{% url 'state_pages.find' %}"
+                                                            ><img class="nav-icon" src="{% static 'famfamfam/icons/page_attach.png' %}"/><span class="nav-label">{% firstof MODULE_STATE_PAGES_LABEL_PLURAL trans "State Pages" %}</span>
+                                                        </a>
+                                                    </li>
+                                                {% endif %}
+
                                                 {% if MODULE_TESTIMONIALS_ENABLED and USER_IS_SUPERUSER %}
                                                 <li class="content-item">
                                                     <a href="{% url 'testimonials' %}"
@@ -215,7 +223,7 @@
                                                             ><img class="nav-icon" src="{% static 'famfamfam/icons/date.png' %}"/><span class="nav-label">{% trans 'Events List' %}</span>
                                                         </a>
                                                     </li>
-                                                    
+
                                                     {% has_perm user events.add_event as can_add_event %}
                                                      {% if can_add_event %}
                                                     <li class="content-item">
@@ -339,10 +347,10 @@
                                                         </a>
                                                     </li>
                                                 {% endif %}
-                                                
+
 					                            {% if MODULE_MEMBERSHIPS_ENABLED %}
 					                            {% if USER_IS_SUPERUSER or user.profile.is_member %}
-					                            {% if USER_IS_SUPERUSER or MODULE_USERS_ALLOWUSERSEARCH or MODULE_MEMBERSHIPS_MEMBERPROTECTION == 'public' %}                                                
+					                            {% if USER_IS_SUPERUSER or MODULE_USERS_ALLOWUSERSEARCH or MODULE_MEMBERSHIPS_MEMBERPROTECTION == 'public' %}
                                                 <li class="content-item">
                                                     <a href="{% url 'membership.search' %}"
                                                         ><img class="nav-icon" src="{% static 'famfamfam/icons/arrow_join.png' %}"/><span class="nav-label">{% trans 'Members' %}</span>
@@ -351,7 +359,7 @@
 					                            {% endif %}
 					                            {% endif %}
 					                            {% endif %}
-                                                
+
                                                 <li class="content-item">
                                                     <a href="{% url 'studygroups.search' %}"
                                                         ><img class="nav-icon" src="{% static 'famfamfam/icons/group_go.png' %}"/><span class="nav-label">{% trans 'Study Groups' %}</span>
@@ -379,6 +387,13 @@
                                                 <li class="content-item">
                                                     <a href="{% url 'chapters.search' %}"
                                                         ><img class="nav-icon" src="{% static 'famfamfam/icons/chart_organisation.png' %}"/><span class="nav-label">{% trans 'Chapters' %}</span>
+                                                    </a>
+                                                </li>
+                                               {% endif %}
+                                                {% if MODULE_STATE_PAGES_ENABLED and USER_IS_SUPERUSER %}
+                                                <li class="content-item">
+                                                    <a href="{% url 'state_assign' %}"
+                                                        ><img class="nav-icon" src="{% static 'famfamfam/icons/chart_organisation.png' %}"/><span class="nav-label">{% trans 'State Editors' %}</span>
                                                     </a>
                                                 </li>
                                                {% endif %}

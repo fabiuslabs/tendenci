@@ -7,6 +7,7 @@ from PIL import Image
 from io import BytesIO
 
 from django.db import models
+from django.forms import ModelChoiceField, model_to_dict
 from django.urls import reverse
 from django.contrib.auth.models import User
 from django.utils.translation import gettext_lazy as _
@@ -43,6 +44,15 @@ def profile_directory(instance, filename):
     return f'profiles/photos/{hex_digest}{instance.user.id}/{filename}'
 
 
+def fmt_name(user):
+    return '{first_name} {last_name} ({email})'.format(**model_to_dict(user)).strip(' ')
+
+
+class UserChoiceField(ModelChoiceField):
+    def label_from_instance(self, obj):
+        return fmt_name(obj)
+
+
 class Profile(Person):
 
     SALUTATION_CHOICES = (
@@ -62,7 +72,6 @@ class Profile(Person):
 
     # relations
     guid = models.CharField(max_length=40)
-    account_id = models.IntegerField(blank=True, null=True, unique=True)
     entity = models.ForeignKey(Entity, blank=True, null=True, on_delete=models.SET_NULL)
     pl_id = models.IntegerField(default=1)
     historical_member_number = models.CharField(_('historical member number'), max_length=50, blank=True)
@@ -108,7 +117,7 @@ class Profile(Person):
     first_responder = models.BooleanField(_('first responder'), default=False)
     agreed_to_tos = models.BooleanField(_('agrees to tos'), default=False)
     original_username = models.CharField(max_length=50)
-    
+
     # social media links
     linkedin = models.URLField(_('LinkedIn'), blank=True, default='')
     facebook = models.URLField(_('Facebook'), blank=True, default='')
@@ -216,10 +225,10 @@ class Profile(Person):
     def get_region_name(self):
         """
         Get the region name if the region field stores the value of region id.
-        
+
         The region field is a char field in Profile. It is currently assigned
         on memberships join and edit as the value of a region id. So, the id
-        needs to be converted to region_name to display on user profile. 
+        needs to be converted to region_name to display on user profile.
         """
         if self.region and self.region.isdigit():
             from tendenci.apps.regions.models import Region
@@ -411,7 +420,7 @@ class Profile(Person):
     def chapter_membership(self):
         [chapter_membership] = self.chapter_memberships[:1] or [None]
         return chapter_membership
-    
+
     def chapter_memberships(self):
         return self.user.chaptermembership_set.exclude(
                status_detail='archive').order_by('chapter', '-create_dt')
@@ -426,6 +435,14 @@ class Profile(Person):
         for cm in chapter_memberships:
             chapters.add(cm.chapter)
         return sorted(list(chapters), key=lambda c: c.title)
+
+    def is_chapter_member(self, chapter_id) -> bool:
+        chapters = []
+        chapter_memberships = self.user.chaptermembership_set.exclude(
+               status_detail='archive')
+        for cm in chapter_memberships:
+            chapters.append(cm.chapter.id)
+        return chapter_id in chapters
 
     def refresh_member_number(self):
         """

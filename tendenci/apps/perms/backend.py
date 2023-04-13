@@ -1,6 +1,7 @@
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth.models import User, Permission
 from django.db.models.base import Model
+from tendenci.apps.user_groups.models import Group
 from django.contrib.auth.backends import ModelBackend
 
 from tendenci.apps.perms.object_perms import ObjectPermission
@@ -45,9 +46,24 @@ class ObjectPermBackend(ModelBackend):
         if not hasattr(user_obj, '_group_perm_cache'):
             # tendenci user_groups
             group_perms = Permission.objects.filter(group_permissions__members=user_obj,
-                ).values_list('content_type__app_label', 'codename'
+                ).values_list('content_type__app_label', 'codename', 'group_permissions'
                 ).order_by()
-            group_perms_1 = ["%s.%s" % (ct, name) for ct, name in group_perms]
+            group_perms_1 = ["%s.%s" % (ct, name) for ct, name, _g in group_perms]
+
+            group_perm_origin = []
+            origin_groups = {id: Group.objects.get(pk=id)
+                       for id
+                       in set([
+                    id
+                    for (_ct, _n, id)
+                    in group_perms
+                ])}
+
+            for (content_type, name, group_id) in group_perms:
+                group = origin_groups.get(group_id)
+                group_perm_origin.append((content_type, name, ': '.join([str(group.id), group.name])))
+
+            user_obj._group_perm_origin = group_perm_origin
 
             # django auth groups
             group_perms = Permission.objects.filter(group__user=user_obj,
@@ -163,7 +179,7 @@ class ObjectPermBackend(ModelBackend):
             if hasattr(obj, 'owner'):
                 if obj.owner_id == user.id:
                     return True
-    
+
         if not isinstance(obj, Model):
             return False
 

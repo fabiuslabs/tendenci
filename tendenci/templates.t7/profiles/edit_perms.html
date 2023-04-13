@@ -1,0 +1,114 @@
+{% extends "profiles/base-wide.html" %}
+{% load profile_tags %}
+
+
+{% block title %}{% trans 'Edit User Permissions' %}{% endblock %}
+
+{% block extra_head %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'css/admin/django-admin-widgets.css' %}">
+<style>
+.selector select[multiple], select[size]{
+	height: 250px;
+}
+.selector-available h2, .selector-chosen h2{
+	font-size: 1.3em;
+}
+.edit-profile-perms .selector { width: 840px; }
+.edit-profile-perms .selector select { width: 640px; }
+.edit-profile-perms .selector-available, .edit-profile-perms .selector-chosen { display: block; width: 640px; text-align: center; margin-bottom: 5px; }
+/*.edit-profile-perms .selector-add, .edit-profile-perms .selector-remove { text-indent: 0; background-image: none;}*/
+.selector ul.selector-chooser { display: block; background-image: none; width: 640px;  height: 28px;  margin: 3px 0 !important; padding: 5px;}
+.edit-profile-perms .selector ul.selector-chooser li {
+ display: inline; 
+ float: left;
+ padding: 0 148px; }
+ .selector-remove{
+ 	padding-left: 16px
+ }
+.edit-profile-perms .selector-chosen .selector-filter { display: none; }
+.selector .selector-available input {
+    width: 90%;
+}
+.selector-available, .selector-chosen, .selector ul.selector-chooser {
+	float: none;
+}
+.selector-add {
+    background: url(/static/themes/t7-base/images/admin/selector_stacked-add.gif) top center no-repeat;
+    margin-bottom: 2px;
+}
+.selector-remove {
+    background: url(/static/themes/t7-base/images/admin/selector_stacked-remove.gif) top center no-repeat;
+    margin-bottom: 2px;
+}
+</style>
+
+    <script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+    <script type="text/javascript" src="{% static 'js/admin/django-admin.multiselect.js' %}"></script>
+    <script type="text/javascript">
+        $(document).ready(function(){
+            jQuery.each($("select[multiple]"), function () {
+            // "Locations" can be any label you want
+            SelectFilter.init(this.id, "Permissions", 0, "/media/");
+            });
+
+        });
+    </script>
+{% endblock %}
+
+{% block content %}
+    <div class="t">
+        <div class="t-profile">
+
+            <div class="t-perm">
+                <h1>{% trans "Grant/Remove Module Level Permissions" %}</h1>
+                <h2>{% trans "User:" %} <a href="{{ user_this.get_absolute_url}}">
+                {{ user_this.firstname}} {{ user_this.lastname}}({{ user_this.username}})</a></h2>
+
+                <div class="profile-wrap edit-profile-perms">
+                    <form action="" method="post">{% csrf_token %}
+
+                        <div class="field-wrapper">
+                            {% if form.is_superuser.errors %}
+                                {{ form.is_superuser.errors }}
+                            {% endif %}
+
+                            <b>{{form.is_superuser.label_tag }}</b>
+
+                            {{ form.is_superuser }}
+                            {{form.is_superuser.help_text }}
+                        </div>
+
+                        <div class="field-wrapper">
+                            {% if form.user_permissions.errors %}
+                                {{ form.user_permissions.errors }}
+                            {% endif %}
+
+                            <label for="id_user_permissions" style="float:left; padding-right: 1em;">
+                                <b>{% trans "User Permissions:" %}</b>
+                            </label>
+
+                            <br />
+                            {{ form.user_permissions }}
+                        </div>
+
+                        <div style="clear:both"></div>
+                        <input class="btn btn-default" type="submit" value="{% trans 'Save' %}" />
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_body %}
+    <script type="text/javascript" src="{% static 'js/global/dropdown.js' %}"></script>
+    <script type="text/javascript">
+        var iconrow = new dropdown({
+            container:    'more-options-wrap',
+            trigger:    'more-options-trigger',
+            target:        'more-options-target'
+        });
+    </script>
+{% endblock %}

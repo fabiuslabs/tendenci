@@ -664,7 +664,7 @@ def image_rescale(img, size, force=True):
     max_width, max_height = size
 
     if not force:
-        img.thumbnail((max_width, max_height), pil.LANCZOS)
+        img.thumbnail((max_width, max_height), pil.ANTIALIAS)
     else:
         src_width, src_height = img.size
         src_ratio = float(src_width) / float(src_height)
@@ -682,7 +682,7 @@ def image_rescale(img, size, force=True):
             x_offset = 0
             y_offset = float(src_height - crop_height) / 3
         img = img.crop((int(x_offset), int(y_offset), int(x_offset)+int(crop_width), int(y_offset)+int(crop_height)))
-        img = img.resize((dst_width, dst_height), pil.LANCZOS)
+        img = img.resize((dst_width, dst_height), pil.ANTIALIAS)
 
     img.format = format  # add format back
     return img
@@ -695,6 +695,14 @@ def in_group(user, group):
         returns boolean
     """
     return user.groups.filter(id=group.id).exists()
+
+
+def is_chapter_chair(user):
+    return user.chapters_officer_user.filter(position__title='Chapter Chair').exists()
+
+
+def is_chapter_chair_of(user, chapter):
+    return user.chapters_officer_user.filter(position__title='Chapter Chair', chapter=chapter).exists()
 
 
 def detect_template_tags(string):

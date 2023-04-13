@@ -1,0 +1,191 @@
+{% load base_tags %}
+{% load perm_tags %}
+
+{% has_perm user site_settings.change_setting as can_edit_setting %}
+{% has_perm user chapters.add_chapter as can_add_chapter %}
+{% has_perm user chapters.add_position as can_add_position %}
+
+{% if app_object %}
+    {% has_perm user chapters.view_chapter app_object as can_view_chapter %}
+    {% has_perm user chapters.change_chapter app_object as can_edit_chapter %}
+    {% has_perm user chapters.delete_chapter app_object as can_delete_chapter %}
+{% else %}
+    {% has_perm user chapters.view_chapter as can_view_chapter %}
+    {% has_perm user chapters.change_chapter as can_edit_chapter %}
+{% endif %}
+
+
+<ul class="dropdown-menu">
+    <li>
+        <div class="yamm-content custom-yamm-content content-dropdown">
+            <div class="row">
+                <ul class="list-unstyled content-dropdown-col col-sm-{% if app_object %}6{% else %}12{% endif %} col-xs-12">
+                    {% if app_object %}
+                        <li>
+                            <span class="content-head text-content-head">{% trans 'All Chapters' %}</span>
+                        </li>
+                    {% endif %}
+
+                    {% if can_edit_setting %}
+                        <li class="content-item">
+                            <span class="app-name">
+                                <a href="{% url 'settings.index' 'module' 'chapters' %}">{% trans "Settings" %}</a>
+                            </span>
+                        </li>
+                    {% endif %}
+
+                    <li class="content-item">
+                        <span class="app-name">
+                            <a href="{% url 'chapters.search' %}">{% trans "Search Chapters" %}</a>
+                        </span>
+                    </li>
+
+                    {% if can_add_chapter %}
+                        <li class="content-item">
+                            <span class="app-name">
+                                {% if request.user.is_superuser %}
+                                 <a href="{% url 'admin:chapters_chapter_add' %}">{% trans "Add Chapter" %}</a>
+                                {% else %}
+                                <a href="{% url 'chapters.add' %}">{% trans "Add Chapter" %}</a>
+                                {% endif %}
+                            </span>
+                        </li>
+                    {% endif %}
+
+                    {% if can_add_position %}
+                        <li class="content-item">
+                            <span class="app-name">
+                                <a href="{% url 'admin:chapters_position_add' %}">{% trans "Add Position" %}</a>
+                            </span>
+                        </li>
+                    {% endif %}
+
+					{% if MODULE_CHAPTERS_MEMBERSHIPSENABLED %}
+					{% if request.user.profile.is_chapter_coordinator %}
+					<li class="content-item">
+                            <span class="app-name">
+                                <a href="{% url 'chapters.coordinating_group_list' %}">{% trans "My State Members" %}</a>
+                            </span>
+                     </li>
+					<li class="content-item">
+                            <span class="app-name">
+                                <a href="{% url 'chapters.memberships_search' %}">{% trans "Chapter Members in my State" %}</a>
+                            </span>
+                     </li>
+					{% endif %}
+					{% endif %}
+
+					{% if request.user.is_superuser %}
+					{% if MODULE_CHAPTERS_MEMBERSHIPSENABLED %}
+					<li class="content-item">
+                            <span class="app-name">
+                                <a href="{% url 'chapters.memberships_search' %}">{% trans "Search Chapter Members" %}</a>
+                            </span>
+                     </li>
+					<li class="content-item">
+                        <span class="app-name">
+                            <a href="{% url 'chapters.memberships_import' %}">{% trans "Import Chapter Memberships" %}</a>
+                        </span>
+                    </li>
+                    {% endif %}
+					<li class="content-item">
+                        <span class="app-name">
+                            <a href="{% url 'admin:app_list' 'chapters' %}">{% trans 'Admin Backend' %}</a>
+                        </span>
+                    </li>
+                	{% endif %}
+
+                </ul>
+
+                {% if app_object %}
+                    {% with app_object|args:request.user|call:'is_chapter_leader' as is_chapter_leader %}
+                    {% if can_view_chapter or can_edit_chapter or is_chapter_leader %}
+                        <ul class="list-unstyled content-dropdown-col col-sm-6 col-xs-12">
+                            <li>
+                                <span class="content-head text-content-head">{% trans "This Chapter" %}</span>
+                            </li>
+
+                            {% if can_view_chapter or is_chapter_leader %}
+                                <li class="content-item">
+                                    <span class="app-name">
+                                        <a href="{{ app_object.get_absolute_url }}">{% trans "View Chapter" %}</a>
+                                    </span>
+                                </li>
+	                            {% if can_add_chapter %}
+	                                <li class="content-item">
+	                                    <span class="app-name">
+	                                        <a href="{% url "chapters.copy_from" app_object.pk %}">{% trans "Clone Chapter" %}</a>
+	                                    </span>
+	                                </li>
+	                            {% endif %}
+                            {% endif %}
+
+                            {% if can_edit_chapter or is_chapter_leader %}
+                                <li class="content-item">
+                                    <span class="app-name">
+                                        <a href="{% url 'chapters.edit' app_object.pk %}">{% trans "Edit Chapter" %}</a>
+                                    </span>
+                                </li>
+
+                                <li class="content-item">
+                                    <span class="app-name">
+                                        <a href="{% url 'chapters.edit.meta' app_object.pk %}">{% trans "Edit Meta" %}</a>
+                                    </span>
+                                </li>
+
+                            {% if can_edit_chapter %}
+                                <li class="content-item">
+                                    <span class="app-name">
+                                        <a href="{% url 'category.update' app_object.opt_app_label chapter.opt_module_name app_object.pk %}">{% trans "Edit Categories" %}</a>
+                                    </span>
+                                </li>
+                            {% endif %}
+
+                             <li class="content-item">
+                                    <span class="app-name">
+                                        <a href="{% url 'chapters.edit_app_fields' app_object.pk %}">{% trans "Customize App Fields" %}</a>
+                                    </span>
+                             </li>
+                            <li class="content-item">
+                                    <span class="app-name">
+                                        <a href="{% url 'chapters.edit_membership_types' app_object.pk %}">{% trans "Set/Update Prices" %}</a>
+                                    </span>
+                             </li>
+                            {% if MODULE_CHAPTERS_MEMBERSHIPSENABLED %}
+                             <li class="content-item">
+                                    <span class="app-name">
+                                        <a href="{% url 'chapters.memberships_search_single_chapter' app_object.pk %}">{% trans "Chapter Members" %}</a>
+                                    </span>
+                             </li>
+
+							<li class="content-item">
+                                <span class="app-name">
+                                    <a href="{% url 'chapters.memberships_import_single_chapter' app_object.pk %}">{% trans "Import Chapter Memberships" %}</a>
+                                </span>
+                            </li>
+                            {% endif %}
+                            {% endif %}
+
+                            <li class="content-item">
+                                <span class="app-name">
+                                    <a href="{% url 'files' %}?group={{ app_object.group_id }}">{% trans 'Files' %}</a>
+                                </span>
+                            </li>
+
+                            {% if can_delete_chapter %}
+                                <li class="divider"></li>
+
+                                <li class="content-item">
+                                    <span class="app-name">
+                                        <a class="delete" href="{% url 'chapters.delete' app_object.pk %}">{% trans "Delete Chapter" %}</a>
+                                    </span>
+                                </li>
+                            {% endif %}
+                        </ul>
+                    {% endif %}
+                    {% endwith %}
+                {% endif %}
+            </div>
+        </div>
+    </li>
+</ul>

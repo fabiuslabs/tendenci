@@ -1,1 +1,21 @@
-../../../../themes/t7-base/static/css/event-logs-info.css
+#info {
+    padding-top: 20px;
+}
+
+#info tr,td {
+    padding: 5px;
+}
+
+#info .event-model {
+    border-bottom: 1px solid #000000;
+}
+
+#info .event-model-label {
+    text-transform: uppercase;
+    padding-top: 15px;
+}
+
+#info .color-box {
+    width: 10px;
+    height: 10px;
+}

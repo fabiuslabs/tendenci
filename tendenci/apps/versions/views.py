@@ -8,3 +8,7 @@ def version_list(request, ct=None, object_id=None, template_name="versions/versi
 
     return render_to_resp(request=request, template_name=template_name,
         context={'versions': versions})
+
+
+def git_version(request):
+    return render_to_resp(request=request, template_name="versions/git.txt", content_type='text/plain')

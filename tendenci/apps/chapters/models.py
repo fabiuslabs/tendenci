@@ -109,7 +109,7 @@ class Chapter(BasePage):
 
     def officers(self):
         return Officer.objects.filter(chapter=self).order_by('pk')
-    
+
     def save(self, *args, **kwargs):
         if not self.id:
             setattr(self, 'entity', None)
@@ -185,25 +185,18 @@ class Chapter(BasePage):
 
     def update_group_perms(self, **kwargs):
         """
-        Update the associated group perms for the officers of this chapter. 
+        Update the associated group perms for the officers of this chapter.
         Grant officers the view and change permissions for their own group.
-        
-        Note: this group is unique among chapters, but might be shared by committees.
-
         """
         if not self.group:
             return
- 
+
         ObjectPermission.objects.remove_all(self.group)
-    
+
         perms = ['view', 'change']
 
         officer_users = [officer.user for officer in self.officers(
             ).filter(Q(expire_dt__isnull=True) | Q(expire_dt__gte=date.today()))]
-        # include officers in committees that are associated with this group
-        for committee in self.group.committee_set.all():
-            officer_users.extend([officer.user for officer in committee.officers(
-            ).filter(Q(expire_dt__isnull=True) | Q(expire_dt__gte=date.today()))])
         if officer_users:
             ObjectPermission.objects.assign(officer_users,
                                         self.group, perms=perms)
@@ -212,29 +205,18 @@ class Chapter(BasePage):
 
     def update_newsletter_group_perms(self, **kwargs):
         """
-        Update the associated newsletter_group perms for the officers of this chapter. 
+        Update the associated newsletter_group perms for the officers of this chapter.
         Grant officers the view and change permissions for their own group.
-
-        Note: this newsletter group could be shared by chapters, 
-               and by committees.
         """
         if not self.newsletter_group:
             return
- 
+
         ObjectPermission.objects.remove_all(self.newsletter_group)
-    
+
         perms = ['view', 'change']
 
         officer_users = [officer.user for officer in self.officers(
             ).filter(Q(expire_dt__isnull=True) | Q(expire_dt__gte=date.today()))]
-        # include officers in committees that are associated with this group
-        for committee in self.newsletter_group.committee_set.all():
-            officer_users.extend([officer.user for officer in committee.officers(
-            ).filter(Q(expire_dt__isnull=True) | Q(expire_dt__gte=date.today()))])
-        # also check if newsletter_group is shared by other chapters
-        for chapter in self.newsletter_group.chapter_set.exclude(id=self.id):
-            officer_users.extend([officer.user for officer in chapter.officers(
-            ).filter(Q(expire_dt__isnull=True) | Q(expire_dt__gte=date.today()))])
         if officer_users:
             ObjectPermission.objects.assign(officer_users,
                                         self.newsletter_group, perms=perms)
@@ -254,6 +236,14 @@ class Chapter(BasePage):
             return self.chaptermembership_set.filter(user=user).exists()
 
         return False
+
+    def is_in_chapter(self, user):
+        """
+        Officers are not (necessarily) members.
+        For purposes of template visibility and access,
+        we ought accept both
+        """
+        return self.is_chapter_leader(user) or self.is_chapter_member(user)
 
     def get_coordinating_agency(self):
         [coord_agency] = CoordinatingAgency.objects.filter(state=self.state)[:1] or [None]
@@ -290,7 +280,7 @@ class Officer(models.Model):
     def __str__(self):
         return "%s" % self.pk
 
- 
+
 class CoordinatingAgency(models.Model):
     state = models.CharField(_('state'), max_length=50, unique=True)
     group = models.ForeignKey(Group, on_delete=models.CASCADE,
@@ -322,15 +312,15 @@ class CoordinatingAgency(models.Model):
         if not self.group:
             self._auto_generate_group()
         self._populate_group()
-        
+
     def _auto_generate_group(self):
         if not self.group:
             if self.state:
                 state_name = get_us_state_name(self.state)
                 name = f'State {state_name}'
                 kwargs = {
-                 'description': "Auto-generated with the chapter coordinating agency.", 
-                 'notes': "Auto-generated with the chapter coordinating agency. Used for chapter coordinators only",  
+                 'description': "Auto-generated with the chapter coordinating agency.",
+                 'notes': "Auto-generated with the chapter coordinating agency. Used for chapter coordinators only",
                  'creator': self.creator,
                  'creator_username': self.creator_username,
                  'owner': self.creator,
@@ -346,17 +336,17 @@ class CoordinatingAgency(models.Model):
                           "sync_chapter_coord_groups",
                           "--coord_agency_id",
                           str(self.pk)])
-                
+
     def update_group_perms(self, **kwargs):
         """
-        Update the associated group perms for the coordinators of this agency. 
+        Update the associated group perms for the coordinators of this agency.
         Grant coordinators the view and change permissions for their own group.
         """
         if not self.group:
             return
- 
+
         ObjectPermission.objects.remove_all(self.group)
-    
+
         perms = ['view', 'change']
 
         coordinator_users = [coordinator for coordinator in self.coordinators.all()]
@@ -368,14 +358,14 @@ class CoordinatingAgency(models.Model):
 class CoordinatorUser(models.Model):
     coordinating_agency = models.ForeignKey(CoordinatingAgency, on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    
+
     def __str__(self):
-        return f'{self.user.first_name} {self.user.last_name}' 
-    
+        return f'{self.user.first_name} {self.user.last_name}'
+
     def get_absolute_url(self):
         return reverse('profile', args=[self.user.username])
 
-            
+
 class ChapterMembershipType(OrderingBaseModel, TendenciBaseModel):
     PRICE_FORMAT = '%s - %s'
     ADMIN_FEE_FORMAT = ' (+%s admin fee)'
@@ -469,7 +459,7 @@ class ChapterMembershipType(OrderingBaseModel, TendenciBaseModel):
             if customized_type:
                 price = customized_type.price
                 renewal_price = customized_type.renewal_price
-                    
+
         if renew_mode:
             price_display = f'{self.name} - {tcurrency(renewal_price)} Renewal'
         else:
@@ -479,20 +469,6 @@ class ChapterMembershipType(OrderingBaseModel, TendenciBaseModel):
 
 
     def get_expiration_dt(self, renewal=False, join_dt=None, renew_dt=None, previous_expire_dt=None):
-        """
-        Calculate the expiration date - for join or renew (renewal=True)
-
-        Examples:
-
-            For join:
-            expiration_dt = membership_type.get_expiration_dt(join_dt=chapter_membership.join_dt)
-
-            For renew:
-            expiration_dt = membership_type.get_expiration_dt(renewal=True,
-                                                              join_dt=chapter_membership.join_dt,
-                                                              renew_dt=chapter_membership.renew_dt,
-                                                              previous_expire_dt=None)
-        """
         now = datetime.now()
 
         if not join_dt or not isinstance(join_dt, datetime):
@@ -620,7 +596,7 @@ class ChapterMembership(TendenciBaseModel):
     social_media_links = models.CharField(max_length=500, blank=True, default='')
     school_type = models.CharField(max_length=50, blank=True)
     school_name = models.CharField(max_length=200, blank=True, default='')
-    
+
     ud1 = models.TextField(blank=True, default='')
     ud2 = models.TextField(blank=True, default='')
     ud3 = models.TextField(blank=True, default='')
@@ -784,7 +760,7 @@ class ChapterMembership(TendenciBaseModel):
     def get_actions(self, user):
         """
         Returns a list of tuples with (link, label)
- 
+
         Possible actions:
             approve
             disapprove
@@ -793,23 +769,23 @@ class ChapterMembership(TendenciBaseModel):
         """
         actions = []
         status = self.get_status()
- 
+
         is_superuser = user.is_superuser
         is_chapter_leader = self.chapter.is_chapter_leader(user)
- 
+
         renew_link = reverse('chapters.membership_renew', args=[self.pk])
- 
+
         details_link = reverse('chapters.membership_details', args=[self.pk])
         approve_link = f'{details_link}?approve'
         disapprove_link = f'{details_link}?disapprove'
         expire_link = f'{details_link}?expire'
- 
+
         if self.can_renew() and renew_link:
             actions.append((renew_link, _('Renew')))
         elif (is_superuser or is_chapter_leader) and renew_link:
             if self.is_active() or self.is_expired():
                 actions.append((renew_link, _('Admin: Renew')))
- 
+
         if is_superuser or is_chapter_leader:
             if status == 'active':
                 actions.append((expire_link, _('Expire Chapter Membership')))
@@ -819,7 +795,7 @@ class ChapterMembership(TendenciBaseModel):
                 actions.append((expire_link, _('Expire Chapter Membership')))
             elif status == 'expired':
                 actions.append((approve_link, _('Approve Chapter Membership')))
- 
+
         return actions
 
     def get_price(self):
@@ -853,17 +829,17 @@ class ChapterMembership(TendenciBaseModel):
             invoice.ship_to_user(self.user)
             invoice.set_creator(creator)
             invoice.set_owner(self.user)
-    
+
             # price information ----------
             price = self.get_price()
 
             invoice.subtotal = price
             invoice.total = price
             invoice.balance = price
-    
+
             invoice.due_date = datetime.now()
             invoice.ship_date = datetime.now()
-    
+
             invoice.save()
             self.invoice = invoice
             self.save()
@@ -1058,7 +1034,7 @@ class ChapterMembership(TendenciBaseModel):
 
         # new invoice; bound via ct and object_id
         self.save_invoice(status_detail='tendered')
-        
+
         # if external payment, mark as paid on approval
         if self.use_third_party_payment:
             if self.invoice.balance > 0:
@@ -1365,21 +1341,23 @@ class ChapterMembershipApp(TendenciBaseModel):
             setattr(self, field_name, template.render(context=context))
 
     def get_app_fields(self, chapter, request_user, field_names_to_exclude=[]):
+        ChapterMembershipChapterAppField.clone_default_app_fields(chapter)
         """
         Retrieves a list of fields for the chapter.
         """
-        app_fields = self.fields.filter(display=True)
+        app_fields = ChapterMembershipChapterAppField.objects.filter(display=True, chapter=chapter)
         if not (request_user.is_superuser or chapter.is_chapter_leader(request_user)):
             app_fields = app_fields.filter(admin_only=False)
         if field_names_to_exclude:
             app_fields = app_fields.exclude(field_name__in=field_names_to_exclude)
         app_fields = app_fields.order_by('position')
-        for field in app_fields:
-            [cfield] = field.customized_fields.filter(chapter=chapter)[:1] or [None]
-            if cfield:
-                field.help_text = cfield.help_text
-                field.choices = cfield.choices
-                field.default_value = cfield.default_value
+        # Comment out below because we don't use customized_fields relation
+        # for field in app_fields:
+        #     [cfield] = field.customized_fields.filter(chapter=chapter)[:1] or [None]
+        #     if cfield:
+        #         field.help_text = cfield.help_text
+        #         field.choices = cfield.choices
+        #         field.default_value = cfield.default_value
         return app_fields
 
 
@@ -1452,7 +1430,7 @@ class ChapterMembershipAppField(OrderingBaseModel):
         """
             Generate the form field class for this field.
         """
-        FIELD_MAX_LENGTH = 2000 
+        FIELD_MAX_LENGTH = 2000
         if self.field_type and self.id:
             if "/" in self.field_type:
                 field_class, field_widget = self.field_type.split("/")
@@ -1700,6 +1678,13 @@ class Notice(models.Model):
         context['chapter_membership'] = chapter_membership
         context.update(global_context)
 
+        if chapter_membership and chapter_membership.expire_dt:
+            context.update({
+                'expire_dt': time.strftime(
+                "%d-%b-%y %I:%M %p",
+                chapter_membership.expire_dt.timetuple()),
+            })
+
         if chapter_membership and chapter_membership.payment_method:
             payment_method_name = chapter_membership.payment_method.human_name
         else:
@@ -1717,8 +1702,8 @@ class Notice(models.Model):
         else:
             invoice_link = ""
             total_amount = ""
-        if chapter_membership and chapter_membership.expire_dt:
-            expire_dt = time.strftime("%d-%b-%y",
+        if chapter_membership.expire_dt:
+            expire_dt = time.strftime("%d-%b-%y %I:%M %p",
                                       chapter_membership.expire_dt.timetuple())
         else:
             expire_dt = ''
@@ -2082,3 +2067,142 @@ class ChapterMembershipImportData(BaseImportData):
 
     class Meta:
         app_label = 'chapters'
+
+
+class ChapterMembershipChapterAppField(OrderingBaseModel):
+    chapter = models.ForeignKey(Chapter, related_name="membership_app_fields", on_delete=models.CASCADE)
+
+    label = models.CharField(_("Label"), max_length=ChapterMembershipAppField.LABEL_MAX_LENGTH)
+    content_type = models.ForeignKey(ContentType, null=True, on_delete=models.CASCADE)
+    field_name = models.CharField(max_length=100, blank=True, default='')
+    required = models.BooleanField(_("Required"), default=False, blank=True)
+    display = models.BooleanField(_("Show"), default=True, blank=True)
+    customizable = models.BooleanField(default=False, blank=True,
+                                       help_text=_('Chapter leaders can customize this field.'))
+    admin_only = models.BooleanField(_("Admin Only"), default=False)
+
+    field_type = models.CharField(_("Field Type"), blank=True, choices=ChapterMembershipAppField.FIELD_TYPE_CHOICES,
+                                  max_length=64)
+    description = models.TextField(_("Description"),
+                                   max_length=200,
+                                   blank=True,
+                                   default='')
+    help_text = models.CharField(_("Help Text"),
+                                 max_length=300,
+                                 blank=True,
+                                 default='')
+    choices = models.CharField(_("Choices"), max_length=1000, blank=True,
+                               help_text=_("Comma separated options where applicable"))
+    default_value = models.CharField(_("Default Value"),
+                                     max_length=200,
+                                     blank=True,
+                                     default='')
+    css_class = models.CharField(_("CSS Class"),
+                                 max_length=200,
+                                 blank=True,
+                                 default='')
+
+    class Meta:
+        verbose_name = _("Chapter Field")
+        verbose_name_plural = _("Chapter Fields")
+        ordering = ('position',)
+        app_label = 'chapters'
+
+    def __str__(self):
+        return str(self.id)
+
+    def get_field_class(self, initial=None):
+        """
+            Generate the form field class for this field.
+        """
+        FIELD_MAX_LENGTH = 2000
+        if self.field_type and self.id:
+            if "/" in self.field_type:
+                field_class, field_widget = self.field_type.split("/")
+            else:
+                field_class, field_widget = self.field_type, None
+            if field_class == 'CountrySelectField':
+                field_class = CountrySelectField
+            else:
+                field_class = getattr(forms, field_class)
+            field_args = {"label": self.label,
+                          "required": self.required,
+                          'help_text': self.help_text}
+            arg_names = field_class.__init__.__code__.co_varnames
+            if initial:
+                field_args['initial'] = initial
+            else:
+                if self.default_value:
+                    field_args['initial'] = self.default_value
+            if "max_length" in arg_names:
+                field_args["max_length"] = FIELD_MAX_LENGTH
+            if "choices" in arg_names:
+                if self.field_name not in ['membership_type', 'payment_method']:
+                    choices = [s.strip() for s in self.choices.split(",")]
+                    if self.field_name == 'sex':
+                        field_args["choices"] = [(s.split(':')[0].strip(), s.split(':')[-1].strip()) for s in choices]
+                    else:
+                        field_args["choices"] = list(zip(choices, choices))
+            if field_widget is not None:
+                module, widget = field_widget.rsplit(".", 1)
+                field_args["widget"] = getattr(import_module(module), widget)
+            if self.field_type == 'FileField':
+                field_args["validators"] = [FileValidator()]
+
+            return field_class(**field_args)
+        return None
+
+    @staticmethod
+    def get_default_field_type(field_name):
+        """
+        Get the default field type for the ``field_name``.
+        If the ``field_name`` is the name of one of the fields
+        in User, Profile, MembershipDefault and MembershipDemographic
+        models, the field type is determined via the field.
+        Otherwise, default to 'CharField'.
+        """
+        available_field_types = [choice[0] for choice in
+                                 ChapterMembershipAppField.FIELD_TYPE_CHOICES]
+        fld = None
+        field_type = 'CharField'
+
+        chapter_membership_fields = dict([(field.name, field)
+                                          for field in ChapterMembership._meta.fields])
+        if field_name in chapter_membership_fields:
+            fld = chapter_membership_fields[field_name]
+
+        if fld:
+            field_type = fld.get_internal_type()
+            if field_type not in available_field_types:
+                if field_type in ['ForeignKey', 'OneToOneField']:
+                    field_type = 'ChoiceField'
+                elif field_type in ['ManyToManyField']:
+                    field_type = 'MultipleChoiceField'
+                else:
+                    field_type = 'CharField'
+        return field_type
+
+    @staticmethod
+    def clone_default_app_fields(chapter):
+        """
+        Clone chapter specific chapter membership app fields from default global app fields if not already exist
+        """
+        if not ChapterMembershipChapterAppField.objects.filter(chapter=chapter).exists():
+            for field in ChapterMembershipAppField.objects.all():
+                ChapterMembershipChapterAppField.objects.create(
+                    chapter=chapter,
+                    position=field.position,
+                    label=field.label,
+                    field_name=field.field_name,
+                    required=field.required,
+                    display=field.display,
+                    customizable=field.customizable,
+                    admin_only=field.admin_only,
+                    field_type=field.field_type,
+                    description=field.description,
+                    help_text=field.help_text,
+                    choices=field.choices,
+                    default_value=field.default_value,
+                    css_class=field.css_class,
+                    content_type=field.content_type,
+                )

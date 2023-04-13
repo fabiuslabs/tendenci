@@ -1,0 +1,54 @@
+{% load chapter_tags %}
+
+<div class="page-header">
+   <h1>{% if is_renewal %}{% trans 'Chapter Membership Renew' %}{% elif is_edit %}{% trans 'Chapter Membership Edit' %}{% else %}{{ app.name }}{% endif %}</h1>
+  {% if is_renewal %}
+      {% if app.renewal_description %}<p>{{ app.renewal_description|safe }}</p>{% endif %}
+  {% else %}
+      {% if not is_edit %}
+      {% if app.description %}<p>{{ app.description|safe }}</p>{% endif %}
+      {% endif %}
+  {% endif %}
+</div>
+{% if is_renewal or is_edit %}
+{% if chapter_membership and request.user != chapter_membership.user %}
+<div>{% trans 'Member: ' %}<a href="{% url 'profile' chapter_membership.user.username %}">{{ chapter_membership.user.get_full_name }}</a></div>
+{% endif %}
+{% endif %}
+{% if chapter_membership_form.errors.values %}
+    <div class="form-errors">
+        {% trans 'There were some problems in the form. Please review. Thanks!' %}
+            {% for error in chapter_membership_form.non_field_errors %}
+                <p><a href="#">{{ error }}</a></p>
+            {% endfor %}
+
+        {% for field in chapter_membership_form %}
+            {% if field.errors %}
+                  {% for error in field.errors %}
+                    <p><a href="{{ request.get_full_path }}#{{ field.auto_id }}">{{ field.label }} - {{ error }}</a></p>
+                  {% endfor %}
+            {% endif %}
+        {% endfor %}
+
+        {% if not is_edit %}
+            {% for field in captcha_form %}
+                {% if field.errors %}
+                    {% for error in field.errors %}
+                        <p><a href="{{ request.get_full_path }}#{{ field.auto_id }}">{{ field.label }} - {{ error }}</a></p>
+                    {% endfor %}
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+    </div>
+{% endif %}
+
+{% for field_obj in app_fields %}
+    {% render_chapter_membership_field request field_obj chapter_membership_form %}
+{% endfor %}
+
+
+<script type="text/javascript">
+$(document).ready(function(){
+
+});
+</script>

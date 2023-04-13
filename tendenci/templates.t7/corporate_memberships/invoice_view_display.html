@@ -1,0 +1,44 @@
+{% load base_filters %}
+
+<tr>
+    <td>
+        {% if obj %}
+            {{ obj.corporate_membership_type.name|truncatewords:30 }}
+            #<a href="{% url "corpmembership.view" obj.id %}" title="Corporate Membership">{{ obj.id }}</a>
+
+            &nbsp;{{ obj|truncatewords:5 }}
+
+        {% else %}
+            {% trans "Corporate Membership information not available" %}
+        {% endif%}
+    </td>
+    <td class="td-right">
+        {% if obj and obj.donation_amount %}
+        {{ invoice.total|subtract:obj.donation_amount|format_currency }}
+         {% else %}
+           {{ invoice.total|format_currency }}
+ 		{% endif%}
+    </td>
+</tr>
+
+{% if obj.renewal %}
+   {% if obj.donation_amount %}
+       <tr>
+            <td>
+                {% trans "Donation Amount " %}
+            </td>
+            <td class="td-right">
+                {{ obj.donation_amount|format_currency }}
+            </td>
+        </tr>
+       {% endif %}
+
+    {% for renew_entry in obj.indivmembershiprenewentry_set.all %}
+        <tr>
+            <td>
+                <a href="{% url 'profile' renew_entry.membership.user.username %}">{{ renew_entry.membership.user.get_full_name }} #{{ renew_entry.membership.member_number }}</a>
+            </td>
+            <td class="td-right"></td>
+        </tr>
+    {% endfor %}
+{% endif%}

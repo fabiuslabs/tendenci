@@ -1,6 +1,9 @@
 from django import forms
+from django.db.models import CharField, DecimalField
 from django.utils.translation import gettext_lazy as _
-from tendenci.apps.donations.models import Donation
+
+from tendenci.apps.base.forms import FormControlWidgetMixin
+from tendenci.apps.donations.models import Donation, Transaction
 from tendenci.apps.donations.utils import get_allocation_choices, get_payment_method_choices, get_preset_amount_choices
 from tendenci.apps.site_settings.utils import get_setting
 from tendenci.apps.entities.models import Entity
@@ -22,13 +25,12 @@ class DonationAdminForm(forms.ModelForm):
     email_receipt = forms.BooleanField(initial=True)
     comments = forms.CharField(max_length=1000, required=False,
                                widget=forms.Textarea(attrs={'rows':'3'}))
-    #allocation = forms.ChoiceField()
+    allocation = forms.ChoiceField()
 
     class Meta:
         model = Donation
         fields = ('donation_amount',
                   'payment_method',
-                  'user',
                   'first_name',
                   'last_name',
                   'company',
@@ -41,25 +43,17 @@ class DonationAdminForm(forms.ModelForm):
                   'phone',
                   'email',
                   'email_receipt',
-                  'donate_to_entity',
+                  'allocation',
                   'referral_source',
                   'comments',
                   )
 
     def __init__(self, *args, **kwargs):
-        # if 'user' in kwargs:
-        #     self.user = kwargs.pop('user', None)
-        # else:
-        #     self.user = None
+        if 'user' in kwargs:
+            self.user = kwargs.pop('user', None)
+        else:
+            self.user = None
         super(DonationAdminForm, self).__init__(*args, **kwargs)
-        self.fields['user'].required = False
-
-        # donate_to_entity or allocation
-        entity_qs = Entity.objects.filter(show_for_donation=True)
-        self.fields['donate_to_entity'].queryset = entity_qs
-        self.fields['donate_to_entity'].empty_label = _("Select One")
-        self.fields['donate_to_entity'].label = _('Donate to')
-        self.fields['donate_to_entity'].required = False
 
         preset_amount_str = (get_setting('module', 'donations', 'donationspresetamounts')).strip('')
         if preset_amount_str:
@@ -168,3 +162,72 @@ class DonationForm(forms.ModelForm):
         except:
             raise forms.ValidationError(_(u'Please enter a numeric positive number'))
         return self.cleaned_data['donation_amount']
+
+
+class DonationSearchForm(forms.Form):
+    SEARCH_METHOD_CHOICES = (
+        ('starts_with', _('Starts With')),
+        ('contains', _('Contains')),
+        ('exact', _('Exact')),
+    )
+
+    search_criteria = forms.ChoiceField(choices=[],
+                                        required=False)
+    search_text = forms.CharField(max_length=100, required=False)
+    search_method = forms.ChoiceField(choices=SEARCH_METHOD_CHOICES,
+                                      required=False)
+    start_dt = forms.DateField(label=_('From'), required=False)
+    end_dt = forms.DateField(label=_('To'), required=False)
+
+    start_amount = forms.DecimalField(required=False)
+    end_amount = forms.DecimalField(required=False)
+
+    entity = forms.ChoiceField(choices=(), required=False)
+    default_membership = forms.ChoiceField(choices=(), required=False)
+    chapter_membership = forms.ChoiceField(choices=(), required=False)
+
+    def __init__(self, *args, **kwargs):
+        super(DonationSearchForm, self).__init__(*args, **kwargs)
+
+        # Set start date and end date
+        if self.fields.get('start_dt'):
+            self.fields.get('start_dt').widget.attrs = {
+                'class': 'datepicker',
+            }
+        if self.fields.get('end_dt'):
+            self.fields.get('end_dt').widget.attrs = {
+                'class': 'datepicker',
+            }
+
+        # Set search criteria choices
+        criteria_choices = [('', _('SELECT ONE'))]
+        criteria_choices.append(('id', _('ID')))
+        for field in Transaction._meta.fields:
+            if isinstance(field, CharField) or isinstance(field, DecimalField):
+                criteria_choices.append((field.name, field.verbose_name))
+        self.fields['search_criteria'].choices = criteria_choices
+
+        # Set entity
+        entities = Transaction.objects.values('donate_to_entity__id', 'donate_to_entity__entity_name').order_by('donate_to_entity__entity_name').distinct(
+            'donate_to_entity__entity_name')
+        self.fields['entity'].choices = [('', _('ALL Entities')), ] + [(item['donate_to_entity__id'], item['donate_to_entity__entity_name'])
+                                                                       for item in entities]
+
+        # Set default membership
+        default_memberships = Transaction.objects.values('user__membershipdefault__membership_type__id',
+                                                         'user__membershipdefault__membership_type__name').order_by(
+            'user__membershipdefault__membership_type__name').distinct(
+            'user__membershipdefault__membership_type__name')
+        self.fields['default_membership'].choices = [('', _('ALL Memberships')), ] + [
+            (item['user__membershipdefault__membership_type__id'], item['user__membershipdefault__membership_type__name'])
+            for item in default_memberships]
+
+        # Set chapter membership
+        chapter_memberships = Transaction.objects.values('user__chaptermembership__chapter__id', 'user__chaptermembership__chapter__title').order_by(
+            'user__chaptermembership__chapter__title').distinct(
+            'user__chaptermembership__chapter__title')
+        self.fields['chapter_membership'].choices = [('', _('ALL Memberships')), ] + [
+            (item['user__chaptermembership__chapter__id'], item['user__chaptermembership__chapter__title'])
+            for item in chapter_memberships]
+
+

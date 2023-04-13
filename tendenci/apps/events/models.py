@@ -236,7 +236,7 @@ class RegistrationConfiguration(models.Model):
         Return boolean.
         """
         has_method = GlobalPaymentMethod.objects.filter(is_online=True).exists()
-        has_account = get_setting('site', 'global', 'merchantaccount') != ''
+        has_account = get_setting('site', 'global', 'merchantaccount') is not ''
         has_api = any([settings.MERCHANT_LOGIN, settings.PAYPAL_MERCHANT_LOGIN])
 
         return all([has_method, has_account, has_api])
@@ -547,28 +547,6 @@ class Registration(models.Model):
     @property
     def hash(self):
         return md5(".".join([str(self.event.pk), str(self.pk)]).encode()).hexdigest()
-
-    def allow_adjust_invoice_by(self, request_user):
-        """
-        Returns whether or not the request_user can adjust invoice
-        for this event registration.
-        """
-        if not request_user.is_anonymous:
-            if request_user.is_superuser:
-                return True
-            # check if request_user is chapter leader or committee leader
-            if get_setting('module', 'events', 'leadercanadjust'):
-                [group] = self.event.groups.all()[:1] or [None]
-                if group:
-                    [committee] = group.committee_set.all()[:1] or [None]
-                    if committee:
-                        return committee.is_committee_leader(request_user)
-    
-                    [chapter] = group.chapter_set.all()[:1] or [None]
-                    if chapter:
-                        return chapter.is_chapter_leader(request_user)
-
-        return False
 
     def payment_abandoned(self):
         if self.invoice and self.invoice.balance > 0 and \
@@ -1247,32 +1225,53 @@ class Event(TendenciBaseModel):
     all_day = models.BooleanField(default=False)
     start_dt = models.DateTimeField()
     end_dt = models.DateTimeField()
-    timezone = TimeZoneField(verbose_name=_('Time Zone'), default='US/Central', choices=get_timezone_choices(), max_length=100)
+    timezone = TimeZoneField(verbose_name=_('Time Zone')
+                             , default='US/Central'
+                             , choices=get_timezone_choices()
+                             , max_length=100)
     place = models.ForeignKey('Place', null=True, on_delete=models.SET_NULL)
-    registration_configuration = models.OneToOneField('RegistrationConfiguration', null=True, editable=False, on_delete=models.CASCADE)
-    mark_registration_ended = models.BooleanField(_('Registration Ended'), default=False)
-    enable_private_slug = models.BooleanField(_('Enable Private URL'), blank=True, default=False) # hide from lists
+    registration_configuration = models.OneToOneField('RegistrationConfiguration'
+                                                      , null=True
+                                                      , editable=False
+                                                      , on_delete=models.CASCADE)
+    mark_registration_ended = models.BooleanField(_('Registration Ended')
+                                                  , default=False)
+    enable_private_slug = models.BooleanField(_('Enable Private URL')
+                                              , blank=True
+                                              , default=False) # hide from lists
     private_slug = models.CharField(max_length=500, blank=True, default=u'')
     password = models.CharField(max_length=50, blank=True)
-    on_weekend = models.BooleanField(default=True, help_text=_("This event occurs on weekends"))
+    on_weekend = models.BooleanField(default=True
+                                     , help_text=_("This event occurs on weekends"))
     external_url = models.URLField(_('External URL'), default=u'', blank=True)
     image = models.ForeignKey(EventPhoto,
-        help_text=_('Photo that represents this event.'), null=True, blank=True, on_delete=models.SET_NULL)
-    groups = models.ManyToManyField(Group, default=get_default_group, related_name='events')
+        help_text=_('Photo that represents this event.'), null=True
+        , blank=True, on_delete=models.SET_NULL)
+    groups = models.ManyToManyField(Group
+                                    , default=get_default_group
+                                    , related_name='events')
     tags = TagField(blank=True)
-    priority = models.BooleanField(default=False, help_text=_("Priority events will show up at the top of the event calendar day list and single day list. They will be featured with a star icon on the monthly calendar and the list view."))
+    priority = models.BooleanField(default=False
+                                   , help_text=_("Priority events will show up at the top of the event calendar day list and single day list. They will be featured with a star icon on the monthly calendar and the list view."))
+    volunteer_enabled = models.BooleanField(default=False
+                                            , help_text=_("Enable Volunteer"))
 
     # recurring events
     is_recurring_event = models.BooleanField(_('Is Recurring Event'), default=False)
-    recurring_event = models.ForeignKey(RecurringEvent, null=True, on_delete=models.CASCADE)
+    recurring_event = models.ForeignKey(RecurringEvent
+                                        , null=True
+                                        , on_delete=models.CASCADE)
 
     # additional permissions
-    display_event_registrants = models.BooleanField(_('Display Attendees'), default=False)
+    display_event_registrants = models.BooleanField(_('Display Attendees')
+                                                    , default=False)
     DISPLAY_REGISTRANTS_TO_CHOICES=(("public",_("Everyone")),
                                     ("user",_("Users Only")),
                                     ("member",_("Members Only")),
                                     ("admin",_("Admin Only")),)
-    display_registrants_to = models.CharField(max_length=6, choices=DISPLAY_REGISTRANTS_TO_CHOICES, default="admin")
+    display_registrants_to = models.CharField(max_length=6
+                                              , choices=DISPLAY_REGISTRANTS_TO_CHOICES
+                                              , default="admin")
 
     # html-meta tags
     meta = models.OneToOneField(MetaTags, null=True, on_delete=models.SET_NULL)
@@ -1432,6 +1431,15 @@ class Event(TendenciBaseModel):
                 registrants = registrants.filter(registration__invoice__balance__lte=0)
 
         return registrants
+
+    def volunteers(self, **kwargs):
+        """
+        This method does not respect permissions.
+        """
+
+        volunteers = Volunteer.objects.filter(event=self)
+
+        return volunteers
 
     def registrants_count(self, **kwargs):
         return self.registrants(**kwargs).count()
@@ -1913,3 +1921,29 @@ class RegAddonOption(models.Model):
     def __str__(self):
         #return "%s: %s - %s" % (self.regaddon.pk, self.option.title, self.selected_option)
         return "%s: %s" % (self.regaddon.pk, self.option.title)
+
+
+class Volunteer(models.Model):
+    """
+    Event volunteer.
+    An event can have multiple volunteers.
+    A volunteer can go to multiple events.
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    event = models.ForeignKey(Event, on_delete=models.CASCADE)
+
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
+    email = models.CharField(max_length=100)
+    phone = models.CharField(max_length=50, blank=True)
+    company_name = models.CharField(max_length=100, blank=True)
+    comments = models.TextField(default='', blank=True)
+
+    create_dt = models.DateTimeField(auto_now_add=True)
+    update_dt = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        app_label = 'events'
+
+    def __str__(self):
+        return '%s, %s' % (self.user.last_name, self.user.first_name)

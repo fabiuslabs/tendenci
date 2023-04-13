@@ -121,6 +121,8 @@ urlpatterns += [
 
     re_path(r'^', include('tendenci.apps.committees.urls')),
     re_path(r'^', include('tendenci.apps.chapters.urls')),
+    re_path(r'^', include('tendenci.apps.chapter_pages.urls')),
+    re_path(r'^', include('tendenci.apps.state_pages.urls')),
     re_path(r'^', include('tendenci.apps.case_studies.urls')),
     re_path(r'^', include('tendenci.apps.donations.urls')),
     re_path(r'^', include('tendenci.apps.speakers.urls')),
@@ -146,11 +148,11 @@ if not settings.USE_S3_STORAGE:
             'document_root': settings.THEMES_DIR,
         }),
     ] + urlpatterns
-    # if settings.DEBUG:
-    #     urlpatterns = [
-    #         re_path(r'^plugin-media/(?P<plugin>[^/]+)/(?P<path>.*)$',
-    #             base_views.plugin_static_serve),
-    #     ] + urlpatterns
+    if settings.DEBUG:
+        urlpatterns = [
+            re_path(r'^plugin-media/(?P<plugin>[^/]+)/(?P<path>.*)$',
+                base_views.plugin_static_serve),
+        ] + urlpatterns
 
 if settings.USE_S3_STORAGE:
     urlpatterns = [

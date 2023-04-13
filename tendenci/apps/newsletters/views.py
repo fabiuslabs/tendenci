@@ -66,9 +66,12 @@ class NewsletterListView(NewsletterPermissionMixin, ListView):
     template_name = 'newsletters/search.html'
 
     def get_queryset(self, **kwargs):
-        qset = super(NewsletterListView, self).get_queryset(**kwargs)
-        qset = qset.order_by('-date_created')
+        user = self.request.user
+        if not user.is_superuser:
+            qset = super(NewsletterListView, self).get_queryset(**kwargs)
+            qset = qset.filter(group__in=user.user_groups.all())
 
+        qset = qset.order_by('-date_created')
         return qset
 
 
@@ -237,6 +240,14 @@ class NewsletterDetailView(NewsletterPermissionMixin, NewsletterPassedSLAMixin, 
     def get(self, request, *args, **kwargs):
         EventLog.objects.log(instance=self.get_object(), action='view')
         return super(NewsletterDetailView, self).get(request, *args, **kwargs)
+
+    def get_queryset(self):
+        user = self.request.user
+
+        if user.is_superuser:
+            return super(NewsletterDetailView, self).get_queryset()
+
+        return Newsletter.objects.filter(group__in=user.user_groups.all())
 
 
 @login_required

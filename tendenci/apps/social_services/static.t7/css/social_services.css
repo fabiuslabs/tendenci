@@ -1,1 +1,22 @@
-../../../../themes/t7-base/static/css/social_services.css
+.capitalize {
+    text-transform: capitalize;
+}
+.responder_check {
+    color: red;
+    font-weight: bold;
+}
+#map {
+    height: 500px;
+}
+#map img {
+    width: auto !important;
+}
+.social-services-list-wrap .relief-area {
+    border: 1px solid #CCC;
+    padding: 10px;
+    background: white;
+    margin-bottom: 20px;
+}
+.jqplot-target {
+    float: left;
+}

@@ -1,1 +1,10 @@
-../../../../themes/t7-base/static/css/theme_bar.css
+#theme-bar {
+    margin-bottom: 20px;
+}
+
+#theme-bar .item {
+	list-style:none;
+	float:left;
+    padding-right: 10px;
+}
+

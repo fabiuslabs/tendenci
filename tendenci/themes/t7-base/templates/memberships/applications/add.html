@@ -1,6 +1,7 @@
 {% extends "memberships/base-wide.html" %}
 {% load base_filters %}
 {% load membership_tags %}
+{% load chapter_tags %}
 {% load styled_forms %}
 
 
@@ -180,6 +181,27 @@
             </div>
         {% endif %}
 
+        {% if sel_chapter and chapter_membership_form.errors.values %}
+            <div class="form-errors">
+                {% trans 'There were some problems in the chapter application form. Please review. Thanks!' %}
+
+                {% if chapter_membership_form and chapter_membership_form.errors.values %}
+                    {% for error in chapter_membership_form.non_field_errors %}
+                        <p><a href="#">{{ error }}</a></p>
+                    {% endfor %}
+                {% endif %}
+
+                {% for field in chapter_membership_form %}
+                    {% if field.errors %}
+                          {% for error in field.errors %}
+                            <p><a href="{{ request.get_full_path }}#{{ field.auto_id }}">{{ field.label }} - {{ error }}</a></p>
+                          {% endfor %}
+                    {% endif %}
+                {% endfor %}
+
+            </div>
+        {% endif %}
+
         {% for field_obj in app_fields %}
             {% render_membership_field request field_obj user_form profile_form demographics_form membership_form education_form %}
             {% if field_obj.field_name == 'membership_type' %}
@@ -251,6 +273,34 @@
                 </div>
             </div>
         {% endif %}
+        {% if chapters %} 
+            <div class="form-group">
+                <label for="id_chapter" class="col-sm-3 control-label inline-block short-label">Chapter</label>
+                <div class="col-sm-8 inline-block">
+                    <select class="form-control" id="id_chapter" name="chapter">
+                        <option value="">Select A Chapter</option>
+                        {% for chapter in chapters %}
+                            {% if chapter.state %}
+                                <option value="{{ chapter.id }}" {% if sel_chapter and sel_chapter.id == chapter.id %}selected{% endif %}>{{ chapter.title }}, {{ chapter.state }}</option>
+                            {% else %}
+                                <option value="{{ chapter.id }}">{{ chapter.title }}</option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                    <span class="help-block">Select Chapters To Join</span>
+                </div>
+            </div>
+         {% endif %} 
+
+        {%if chapters %}
+            <div id="dynamic-charter-inputs">
+                {% if sel_chapter %}
+                    {% for field_obj in chapter_app_fields %}
+                        {% render_chapter_membership_field request field_obj chapter_membership_form %}
+                    {% endfor %}
+                {% endif %}
+            </div>
+        {% endif %}
 
         <div class="form-group">
             <div class="col-sm-offset-3 col-sm-9">
@@ -259,6 +309,9 @@
         </div>
     </form>
 {% endblock %}
+
+
+
 
 
 {% block extra_body %}
@@ -274,7 +327,7 @@
             var code = $('#id_discount_code').val();
             var model = 'membershipset';
             var prices = '0';
-
+     
             $.post(
                 '{% url "discount.check_discount" %}',
                 {
@@ -290,9 +343,40 @@
             );
         });
         {% endif %}
+
+     
+
       })(jQuery);
         $(document).ready(function(){
+            console.log('ready')
+        });
 
+ 
+      </script>
+
+      <script>
+        $(document).ready(function() {
+          // listen for changes in the select dropdown
+          $('#id_chapter').change(function() {
+            var selectedChapter = $(this).val();
+            // clear any existing dynamic inputs
+            $('#dynamic-charter-inputs').empty();
+            console.log("Chapter selected as: " + selectedChapter)
+            if (selectedChapter !== null && selectedChapter !== '') {
+              // add chapter inputs
+              $.ajax({
+                  url: '/chapters/' + selectedChapter + '/memberships/applications/add/',
+                  success: function(response) {
+                      // Append the form elements to the page
+                      console.log(response);
+                      $('#dynamic-charter-inputs').html(response);
+                  },
+                  error: function(xhr, status, error){
+                      console.log('Error: ', error);
+                  }
+              })
+            }
+          });
         });
       </script>
 {% endblock extra_body %}

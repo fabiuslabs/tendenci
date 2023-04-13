@@ -6,7 +6,7 @@ DATABASES = {
 }
 
 INSTALLED_APPS = [
-    'tendenci.libs.recaptcha',
+    'captcha',
 ]
 
 RECAPTCHA_PRIVATE_KEY = 'privkey'

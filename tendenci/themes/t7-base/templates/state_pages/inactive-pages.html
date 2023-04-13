@@ -1,0 +1,33 @@
+{% extends "state_pages/base.html" %}
+{% load bootstrap_pagination_tags %}
+{% load state_page_tags %}
+{% load base_tags %}
+{% load perm_tags %}
+
+{% block title %}{% trans 'State Pages' %} {% trans 'Inactive' %}{% endblock %}
+
+{% block extra_head %}
+{{ block.super }}
+{% endblock %}
+
+{% block content %}
+<div class="t">
+    <h1>{% trans 'State Pages' %} {% trans "Archive" %}</h1>
+
+    {% autopaginate pages 10 %}
+    <div class="pages-wrap">
+    {% for page in pages %}
+        <div class="wrap-search-item">
+            <div class="search-item page-search-item">
+                <h2><a href="{% state_url "state_page.inactive" page.pk %}">{% firstof page.title 'Untitled'%}</a></h2>
+                <div class="item-content">{{ page.content|striptags|truncatewords:20|safe }}</div>
+            </div>
+        </div>
+        {% include "state_pages/meta.html" %}
+    {% empty %}
+    {% endfor %}
+    </div>
+
+    {% paginate %}
+</div>
+{% endblock %}

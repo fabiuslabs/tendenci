@@ -1,1 +1,4 @@
-../../../../themes/t7-base/static/css/labels.css
+label.required:after {
+    content: '*';
+    color: #ED6270;
+    }

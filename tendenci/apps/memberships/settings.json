@@ -220,5 +220,22 @@
         "scope_category": "memberships",
         "store": false,
         "updated_by": ""
+    },
+    {
+        "default_value": "network_sectors",
+        "description": "Additional Membership application field names to be made searchable (comma separated)",
+        "data_type": "string",
+        "update_dt": "2023-04-05 14:30:30",
+        "input_type": "text",
+        "client_editable": true,
+        "name": "searchable_app_fields",
+        "value": "network_sectors",
+        "label": "Additional Searchable Fields",
+        "input_value": "",
+        "parent_id": 0,
+        "scope": "module",
+        "scope_category": "memberships",
+        "store": true,
+        "updated_by": ""
     }
 ]

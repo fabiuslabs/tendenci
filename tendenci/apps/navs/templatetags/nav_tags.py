@@ -1,6 +1,7 @@
 from builtins import str
 from django.template import Library, TemplateSyntaxError, Variable, Node
-from django.utils.translation import gettext_lazy as _
+from django.urls import reverse
+from django.utils.translation import gettext_lazy as _, gettext
 from tendenci.apps.base.template_tags import ListNode, parse_tag_kwargs
 from tendenci.apps.perms.utils import get_query_filters
 from django.contrib.auth.models import AnonymousUser, User
@@ -64,6 +65,7 @@ def navigation(context, nav_id):
     context.update({
         "nav": nav,
         "items": nav.top_items,
+        "logged_in": user.is_authenticated,
     })
     return context
 
@@ -77,6 +79,7 @@ def load_nav(context, nav_id, show_title=False, **kwargs):
     """
     is_site_map = kwargs.get('is_site_map', False)
     is_bootstrap = kwargs.get('is_bootstrap', False)
+    logged_in = kwargs.get('logged_in', False)
 
     # No perms check because load_nav is only called by the other tags
     try:
@@ -89,17 +92,22 @@ def load_nav(context, nav_id, show_title=False, **kwargs):
         "show_title": show_title,
         "is_bootstrap": is_bootstrap,
         'is_site_map': is_site_map,
+        "logged_in": logged_in,
     })
     return context
 
 
 @register.inclusion_tag("navs/navigation_item.html", takes_context=True)
-def nav_item(context, item, **kwargs):
+def nav_item(context, item, logged_in=False, **kwargs):
     """
         Renders a nav item and its children.
     """
     is_bootstrap = kwargs.get('is_bootstrap', False)
     is_site_map = kwargs.get('is_site_map', False)
+    if logged_in and item.url == '/login/':
+        item.url = reverse('auth_logout')
+        item.label = gettext('Logout')
+
     context.update({
         "item": item,
         "is_bootstrap": is_bootstrap,
@@ -139,7 +147,7 @@ def nav(context, nav_id, show_title=False, is_site_map=False):
         nav_object = navs[0]
         nav = get_nav(nav_object.pk, is_site_map=is_site_map)
         if not nav:
-            nav = cache_nav(nav_object, show_title, is_site_map=is_site_map)
+            nav = cache_nav(nav_object, show_title, is_site_map=is_site_map, logged_in=user.is_authenticated)
     except:
         return None
 
@@ -147,6 +155,7 @@ def nav(context, nav_id, show_title=False, is_site_map=False):
         "cached": nav,
         "nav_id": nav_id,
         "show_title": show_title,
+        "logged_in": user.is_authenticated,
     })
     return context
 

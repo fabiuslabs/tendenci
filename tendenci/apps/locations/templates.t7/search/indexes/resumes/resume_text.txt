@@ -1,0 +1,17 @@
+{% load tagging_tags %}
+{% firstof object.title "Untitled" %}
+{{ object.first_name }}
+{{ object.last_name }}
+{{ object.email }}
+{{ object.description }}
+{{ object.location }}
+{{ object.skills }}
+{{ object.experience }}
+{{ object.education }}
+
+is:{{ object.status_detail }}
+
+{% tags_for_object object as tags %}
+{% for tag in tags %}
+{{ tag }}
+{% endfor %}

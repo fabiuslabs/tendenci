@@ -14,7 +14,7 @@
         "duration": 0,
         "guid": "171ad2f0-66c2-11e5-aebb-0242ac110085",
         "creator": 1,
-        "owner_username": "ediaz"
+        "owner_username": "system_generated"
     },
     "model": "directories.directorypricing",
     "pk": 1
@@ -34,7 +34,7 @@
         "duration": 365,
         "guid": "1ec745c2-741b-11e5-aebb-0242ac110109",
         "creator": 1,
-        "owner_username": "ediaz"
+        "owner_username": "system_generated"
     },
     "model": "directories.directorypricing",
     "pk": 2

@@ -15,6 +15,7 @@ from tendenci.apps.events.utils import (registration_earliest_time,
                                         registration_has_started,
                                         registration_has_ended,)
 from tendenci.apps.base.template_tags import ListNode, parse_tag_kwargs
+from tendenci.apps.events.views import shares_group
 from tendenci.apps.perms.utils import get_query_filters
 from tendenci.apps.events.forms import EventSimpleSearchForm
 
@@ -68,8 +69,25 @@ def registrant_options(context, user, registrant):
     return context
 
 
+@register.inclusion_tag("events/volunteers/options.html", takes_context=True)
+def volunteer_options(context, user, volunteer):
+    context.update({
+        "opt_object": volunteer,
+        "user": user
+    })
+    return context
+
+
 @register.inclusion_tag("events/registrants/search-form.html", takes_context=True)
 def registrant_search(context, event=None):
+    context.update({
+        "event": event
+    })
+    return context
+
+
+@register.inclusion_tag("events/volunteers/search-form.html", takes_context=True)
+def volunteer_search(context, event=None):
     context.update({
         "event": event
     })
@@ -254,7 +272,7 @@ def event_list(parser, token):
         type_slug = bits[2]
         ordering = bits[3]
         context_var = bits[5]
-        
+
     if len(bits) == 7:
         day = bits[1]
         type_slug = bits[2]
@@ -559,3 +577,59 @@ def list_events(parser, token):
         kwargs['order'] = 'next_upcoming'
 
     return ListEventsNode(context_var, *args, **kwargs)
+
+
+class SharesGroupNode(Node):
+    def __init__(self, event, user, context_var=None):
+        self.event = Variable(event)
+        self.user = Variable(user)
+        self.context_var = context_var
+
+    def render(self, context):
+        if not all([self.event, self.user]):
+            return False
+
+        try:
+            event = self.event.resolve(context)
+            user = self.user.resolve(context)
+
+            passes = user.is_superuser or shares_group(event, user)
+            if self.context_var:
+                context[self.context_var] = passes
+                return ''
+            else:
+                return passes
+        except:
+            return ''
+
+
+@register.tag
+def common_group(parser, token):
+    bits = token.split_contents()
+    try:
+        event = bits[1]
+    except:
+        event = None
+
+    try:
+        user = bits[2]
+    except:
+        user = None
+
+
+    try:
+        object = bits[3]
+    except:
+        object = None
+
+    if object == 'as':
+        object = None
+        try:
+            context_var = bits[4]
+        except:
+            context_var = None
+    else:
+        try: context_var = bits[5]
+        except: context_var = None
+
+    return SharesGroupNode(event, user, context_var=context_var)

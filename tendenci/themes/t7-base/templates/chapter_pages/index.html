@@ -1,0 +1,10 @@
+{% load chapter_page_tags %}
+<h1>{% trans "Pages Index Page" %}</h1>
+
+<ul>
+    <li><a href="{% chapter_url "chapter_page.search" %}">{% trans "Search" %}</a></li>
+    <li><a href="{% chapter_url "chapter_page.view" %}">{% trans "View" %}</a></li>
+    <li><a href="{% chapter_url "chapter_page.print_view" %}">{% trans "Print View" %}</a></li>
+    <li><a href="{% chapter_url "chapter_page.edit" %}">{% trans "Edit" %}</a></li>
+    <li><a href="{% chapter_url "chapter_page.delete" %}">{% trans "Delete" %}</a></li>
+</ul>

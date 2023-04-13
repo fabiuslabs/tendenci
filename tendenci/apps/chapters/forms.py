@@ -21,7 +21,8 @@ from tendenci.apps.chapters.models import (Chapter, Officer,
                         ChapterMembership,
                         ChapterMembershipFile,
                         CustomizedType,
-                        CoordinatingAgency)
+                        CoordinatingAgency,
+                        ChapterMembershipChapterAppField)
 from tendenci.apps.user_groups.models import Group
 from tendenci.apps.perms.forms import TendenciBaseForm
 from tendenci.libs.tinymce.widgets import TinyMCE
@@ -93,11 +94,24 @@ def assign_search_fields(form, app_field_objs):
 
 
 class ChapterMemberSearchForm(FormControlWidgetMixin, forms.Form):
+    joined_start = forms.DateField(required=False)
+    joined_end = forms.DateField(required=False)
+
+    joined_start.widget.attrs.update({'class': 'datepicker'})
+    joined_end.widget.attrs.update({'class': 'datepicker'})
+
     def __init__(self, *args, **kwargs):
+
         app_fields = kwargs.pop('app_fields')
         user = kwargs.pop('user')
         self.chapters = kwargs.pop('chapters')
+        memberapp_fields = kwargs.pop('memberapp_fields', [])
+
         super(ChapterMemberSearchForm, self).__init__(*args, **kwargs)
+
+        assign_search_fields(self, memberapp_fields)
+        self.memberapp_fields = [self[field_name] for field_name in [app_field.field_name for app_field in memberapp_fields]]
+
         if not self.chapters or len(self.chapters) > 1:
             # chapter field
             chapter_choices = [(0, _('All'))]
@@ -171,7 +185,7 @@ class EmailChapterMemberForm(FormControlWidgetMixin, forms.ModelForm):
         for token in self.VALID_TOKENS:
             help_text += f'<li>{{{{ {token} }}}}</li>'
         help_text += "</ul>"
-        
+
     def clean_body(self):
         body = self.cleaned_data['body']
         err_msg = ''
@@ -593,10 +607,10 @@ class ChapterMembershipForm(FormControlWidgetMixin, forms.ModelForm):
         self.chapter = chapter
         self.app_field_objs = app_field_objs
         super(ChapterMembershipForm, self).__init__(*args, **kwargs)
-        
+
         from tendenci.apps.memberships.forms import assign_fields
         assign_fields(self, self.app_field_objs)
-        
+
         # handle file upload on edit
         if self.edit_mode:
             for field_obj in  self.app_field_objs:
@@ -681,11 +695,13 @@ class ChapterMembershipForm(FormControlWidgetMixin, forms.ModelForm):
     def clean(self):
         cleaned_data = super(ChapterMembershipForm, self).clean()
         if not (self.is_renewal or self.edit_mode):
+            # if request_user is valid user, not anonymous user,
             # check if a chapter membership already exists
-            if ChapterMembership.objects.filter(user=self.request_user,
-                                        chapter=self.chapter).exclude(
-                                            status_detail='archive'):
-                raise forms.ValidationError(_('You have already signed up for this chapter.'))
+            if not self.request_user.is_anonymous:
+                if ChapterMembership.objects.filter(user=self.request_user,
+                                            chapter=self.chapter).exclude(
+                                                status_detail='archive'):
+                    raise forms.ValidationError(_('You have already signed up for this chapter.'))
         return cleaned_data
 
     def save(self):
@@ -698,23 +714,23 @@ class ChapterMembershipForm(FormControlWidgetMixin, forms.ModelForm):
             else:
                 chapter_membership.user = self.request_user
             chapter_membership.renewal = self.is_renewal
-            
+
             if self.renew_from_id:
                 chapter_membership.renew_from_id = self.renew_from_id
             chapter_membership.app = self.app
             chapter_membership.chapter = self.chapter
             chapter_membership.save()
-    
+
             chapter_membership.set_member_number()
             chapter_membership.save()
         else:
             chapter_membership.save()
-            
+
         for field_obj in  self.app_field_objs:
             field_key = field_obj.field_name
-            
+
             if field_key in self.fields and self.fields[field_key].widget.needs_multipart_form:
-                
+
                 # handle file upload
                 # save file to the value field of ChapterMembershipFile
                 # and assign the id of ChapterMembershipFile to the value of the field
@@ -992,7 +1008,7 @@ class UserModelChoiceField(forms.ModelChoiceField):
 
 
 class OfficerBaseFormSet(BaseInlineFormSet):
-    def __init__(self,  *args, **kwargs): 
+    def __init__(self,  *args, **kwargs):
         self.chapter = kwargs.pop("chapter", None)
         super(OfficerBaseFormSet, self).__init__(*args, **kwargs)
 
@@ -1041,7 +1057,7 @@ class ChapterSearchForm(FormControlWidgetMixin, forms.Form):
             self.fields['region'].choices = [('', _('All Regions'))] + [(region.id, region.region_name) for region in regions]
         else:
             del self.fields['region']
-            
+
         if Chapter.objects.exclude(state='').exists():
             states = Chapter.objects.exclude(state='').values_list('state', flat=True).distinct()
             self.fields['state'].choices = [('', _('All States'))] + [(state, state) for state in states]
@@ -1099,7 +1115,7 @@ class ChapterMembershipUploadForm(FormControlWidgetMixin, forms.ModelForm):
 
         # check for valid key
         key = cleaned_data['key']
-        
+
 
         key_list = [k for k in key.split(',')]
         missing_columns = [item for item in key_list if item not in header_row]
@@ -1122,3 +1138,38 @@ class CoordinatingAgencyAdminForm(forms.ModelForm):
                 'entity',
                 'coordinators',)
 
+
+class ChapterFieldBaseFormSet(BaseInlineFormSet):
+    def __init__(self,  *args, **kwargs):
+        self.chapter = kwargs.pop("chapter", None)
+        super(ChapterFieldBaseFormSet, self).__init__(*args, **kwargs)
+
+    def _construct_form(self, i, **kwargs):
+        if hasattr(self, 'chapter'):
+            kwargs['chapter'] = self.chapter
+        return super(ChapterFieldBaseFormSet, self)._construct_form(i, **kwargs)
+
+
+class ChapterFieldForm(forms.ModelForm):
+
+    class Meta:
+        model = ChapterMembershipChapterAppField
+        fields = ('label', 'field_name', 'required', 'display', 'customizable', 'admin_only', 'position')
+
+    def __init__(self, chapter, *args, **kwargs):
+        kwargs.update({'use_required_attribute': False})
+        self.field_order = ['label', 'field_name', 'required', 'display', 'customizable', 'admin_only', 'position']
+        super(ChapterFieldForm, self).__init__(*args, **kwargs)
+        self.fields['field_name'].widget.attrs['readonly'] = True
+
+
+class ChapterAppFieldForm(FormControlWidgetMixin, forms.ModelForm):
+
+    class Meta:
+        model = ChapterMembershipChapterAppField
+        fields = ('label', 'field_name', 'field_type', 'display', 'required', 'customizable', 'admin_only', 'help_text',
+                  'choices', 'default_value', 'css_class')
+
+    def __init__(self, *args, **kwargs):
+        super(ChapterAppFieldForm, self).__init__(*args, **kwargs)
+        self.fields['field_name'].widget.attrs['readonly'] = True
