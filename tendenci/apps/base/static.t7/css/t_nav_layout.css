@@ -1,1 +1,6 @@
-../../../../themes/t7-base/static/css/t_nav_layout.css
+.t-nav-ul *,
+.t-nav-ul *:before,
+.t-nav-ul *:after {
+  -webkit-box-sizing: content-box;
+  -moz-box-sizing: content-box;
+  box-sizing: content-box; }

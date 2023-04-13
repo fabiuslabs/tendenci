@@ -2,6 +2,7 @@ from warnings import warn
 from datetime import datetime
 from django.conf import settings
 from tendenci.apps.site_settings.utils import get_setting
+from tendenci.apps.state_pages.models import StateEditor
 from tendenci.apps.theme.templatetags.static import static
 
 
@@ -49,7 +50,8 @@ def user_classification(request):
     'USER_IS_SUPERUSER' : False,
     'USER_IS_MEMBER': False,
     'USER_IS_MEMBER_ACTIVE': False,
-    'USER_IS_MEMBER_EXPIRED': False
+    'USER_IS_MEMBER_EXPIRED': False,
+    'USER_IS_STATE_EDITOR': False
     }
     if hasattr(request.user, 'profile') and request.user.profile.is_superuser:
         data.update({'USER_IS_SUPERUSER': True})
@@ -65,6 +67,9 @@ def user_classification(request):
             data.update({'USER_IS_MEMBER_EXPIRED': True})
         elif active_memberships.exists() > 0:
             data.update({'USER_IS_MEMBER_ACTIVE': True})
+
+    if not request.user.is_anonymous and StateEditor.objects.filter(user=request.user, status=True).exists():
+        data.update({'USER_IS_STATE_EDITOR': True})
 
     return data
 

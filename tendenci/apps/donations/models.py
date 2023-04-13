@@ -2,10 +2,11 @@ import uuid
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils.translation import gettext_lazy as _
+
+from tendenci.apps.chapters.models import Chapter
 from tendenci.apps.invoices.models import Invoice
 from tendenci.apps.entities.models import Entity
 from tendenci.apps.donations.managers import DonationManager
-from tendenci.apps.base.utils import tcurrency
 
 class Donation(models.Model):
     guid = models.CharField(max_length=50)
@@ -37,9 +38,6 @@ class Donation(models.Model):
     status = models.BooleanField(default=True, null=True)
 
     objects = DonationManager()
-    
-    def __str__(self):
-        return f'Donation {tcurrency(self.donation_amount)} by {self.first_name} {self.last_name}'
 
     class Meta:
         app_label = 'donations'
@@ -120,3 +118,24 @@ class Donation(models.Model):
                     'request': request,
                 }
                 notification.send_emails(recipients,'donation_added', extra_context)
+
+
+class Transaction(models.Model):
+    DONATION_METHOD_CHOICES = (
+        ("donorbox", _("Donorbox")),
+        ("hubspot", _("Hubspot")),
+    )
+
+    guid = models.CharField(max_length=50)
+    email = models.CharField(max_length=50)
+    donation_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    donation_method = models.CharField(choices=DONATION_METHOD_CHOICES, max_length=50)
+    donate_to_entity = models.ForeignKey(Entity, blank=True, null=True, on_delete=models.SET_NULL)
+    user = models.ForeignKey(User, blank=True, null=True, on_delete=models.SET_NULL)
+    donation_dt = models.DateTimeField(blank=True, null=True)
+    create_dt = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        app_label = 'donations'
+        verbose_name = _("Transaction")
+        verbose_name_plural = _("Transactions")

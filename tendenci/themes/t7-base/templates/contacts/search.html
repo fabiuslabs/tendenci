@@ -18,11 +18,17 @@
 
 {% block content %}
     <h1>
-        {% firstof trans SITE_GLOBAL_SITEPRIMARYKEYWORDS trans SITE_GLOBAL_SITEDISPLAYNAME %}
-        {% if MODULE_CONTACTS_LABEL_PLURAL %}
-            {% blocktrans %}{{ MODOULE_CONTACTS_LABEL_PLURAL }} Search{% endblocktrans %}
+        {% if chapter or contact_group %}
+            {% blocktrans %} {{ chapter }} - {{ contact_group }} Contacts {% endblocktrans %}
         {% else %}
-            {% trans "Contacts Search" %}
+            {% firstof trans SITE_GLOBAL_SITEPRIMARYKEYWORDS trans SITE_GLOBAL_SITEDISPLAYNAME %}
+            {% if MODULE_CONTACTS_LABEL_PLURAL %}
+                {% blocktrans %}{{ MODOULE_CONTACTS_LABEL_PLURAL }} Search{% endblocktrans %}
+            {% else %}
+                {% trans "Contacts Search" %}
+            {% endif %}
+            
+            
         {% endif %}
     </h1>
 

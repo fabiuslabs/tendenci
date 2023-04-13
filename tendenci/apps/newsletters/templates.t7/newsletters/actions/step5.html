@@ -1,0 +1,247 @@
+{% extends "newsletters/base.html" %}
+{% load base_filters %}
+
+{% block title %}
+{{ block.super }}{% trans 'Tendenci Newsletter Generator - Ready to Send!'%}
+{% endblock %}
+
+{% block extra_head %}
+{{ block.super }}
+<link rel="stylesheet" href="//ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/smoothness/jquery-ui.css">
+<link rel="stylesheet" href="{% static 'timepicker/timepicker.css' %}">
+<style>
+#id_schedule_type, #id_schedule_send_dt_0, #id_schedule_send_dt_1{
+	width: 200px;
+}
+#id_repeats{
+	width: 100px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="t">
+  <div id="t-newsletters">
+    <div class="page-header">
+      <h1>{% trans 'Ready to Send!' %}</h1>
+    </div>
+
+	{% if form.errors.values %}
+	<div class="alert alert-danger" role="alert">
+	<p>{% trans "There were some problems in the form. Please review. Thanks!" %}</p>
+	     <ul>
+	    {% if form.non_field_errors %}
+	        {% for error in form.non_field_errors %}
+	        <li>{{error}}</li>
+	        {% endfor %}
+	    {% endif %}
+		{% for field in form %}
+	        {% if field.errors %}
+	              {% for error in field.errors %}
+	                  <li><a href="{{ request.get_full_path }}#{{ field.auto_id }}" class="alert-link">{{ error }}</a></li>
+	              {% endfor %}
+	        {% endif %}
+	    {% endfor %}
+		</ul>
+	 </div>
+	{% endif %}
+
+  <p>
+	<strong>{% trans 'Newsletter Recipients: ' %}</strong>
+	{% if object.member_only %}
+	{% trans 'ALL members' %}
+	{% elif object.group %}
+	{% trans 'Usergroup ' %} <a href="{% url 'group.detail' object.group.slug %}">{{ object.group }}</a>
+	{% endif %}
+	({% trans 'total:' %} {{ object.get_recipients.count }})
+  </p>
+
+    <form action="" method="POST">{% csrf_token %}
+      <!-- <div class='step-section cf'>
+      <div class="step-number"><a href="{% url 'newsletter.action.step1' object.pk %}">{% trans 'Step 1' %}</a></div>
+      <div class="step-contents">
+      <div>
+      {% trans 'Specify Action Name and General Properties.' %}
+    </div>
+      <div class="step-content-item">
+      <strong>{{ newsletter.actionname }}</strong>
+    </div>
+    </div>
+    </div>
+      <div class='step-section cf'>
+      <div class="step-number"><a href="{% url 'newsletter.action.step2' object.pk %}">{% trans 'Step 2' %}</a></div>
+      <div class="step-contents">
+      <div>
+      {% trans 'E-mail to bind to this Marketing Action.' %}
+    </div>
+      <div class="step-content-item">
+      {% trans 'Sender' %} : <a href="mailto:{{ object.email.sender }}">{{ object.email.sender }}</a>&nbsp;&nbsp;&nbsp;<a class="body-copy-yellow" href="{% url 'email.viewbody' object.email.pk %}">{% trans 'View Email' %}</a>&nbsp;&nbsp;<a class="body-copy-yellow" href="{% url 'email.edit' object.email.pk %}?next={% url 'newsletter.action.step5' object.pk %}">{% trans 'Edit Email' %}</a>
+    </div>
+      <div class="step-content-item">
+      <strong>{{ object.email.subject }}</strong>
+    </div>
+
+    </div>
+    </div>
+      <div class='step-section cf'>
+      <div class="step-number"><a href="{% url 'newsletter.action.step3' object.pk %}">{% trans 'Step 3' %}</a></div>
+      <div class="step-contents">
+      <div>
+      {% if object.member_only %}
+      {% trans 'Members Only' %}
+      {% else %}
+      {% trans 'Select a Group' %}
+      {% endif %}
+    </div>
+      {% if not object.member_only %}
+      <div class="step-content-item">
+      <strong>{{ object.group }}</strong>&nbsp;&nbsp;&nbsp;&nbsp;<a class="body-copy-yellow" href="{% url 'groups' %}">{% trans 'Search UserGroup' %}</a>
+    </div>
+      {% endif %}
+    </div>
+    </div>
+      <div class='step-section cf'>
+      <div class="step-number"><a href="{% url 'newsletter.action.step4' object.pk %}">{% trans 'Step 4' %}</a></div>
+      <div class="step-contents">
+      <div>
+      {% trans 'Confirm acceptance of site policies and common sense.' %}
+    </div>
+      <div class="step-content-item body-copy-alerts">
+      {% if object.member_only %}
+      {% blocktrans %}
+      I agree that I have permission from all users of the user group to send them e-mail. I understand that by sending this e-mail the transaction, including my IP address, is recorded. Furthermore I am legally bound by common courtesy, common sense, and the acceptable use policy (aup) and privacy policy of this site.
+      {% endblocktrans %}
+      {% else %}
+      {% blocktrans with group=object.group.name %}
+      I agree that I have permission from all users of the <strong>{{ group }}</strong> user group to send them e-mail. I understand that by sending this e-mail the transaction, including my IP address, is recorded. Furthermore I am legally bound by common courtesy, common sense, and the acceptable use policy (aup) and privacy policy of this site.
+      {% endblocktrans %}
+      {% endif %}{% if object.sla %}<span class="body-copy-alerts"><strong>SLA = Agreed</strong></span>{% endif %}
+    </div>
+    </div>
+    </div> -->
+      <div class='step-section cf'>
+
+        <div class="step-contents">
+          <div class="step-content-item">
+            {% blocktrans %}
+            <p><strong>Note:</strong> Sending could take up to 30 minutes or longer depending on the size
+              of your distribution list.</p>
+          </div>
+          {% endblocktrans %}
+          <div class="step-content-item body-copy-alerts">
+            {% blocktrans %}
+            <p>Once submitted the e-mail will be put into the queue for processing within 10 minutes.</p>
+            {% endblocktrans %}
+          </div>
+
+          <div class="form-group">
+            {{ form.create_article }} &nbsp; <label>{{ form.create_article.label }}</label>
+          </div>
+
+	{% if schedule_enabled %}
+          <div class="form-group">
+            {{ form.schedule_send }} &nbsp; <label for="id_schedule_send">{{ form.schedule_send.label }}</label>
+          </div>
+
+		<div id="schedule-fields">
+			<div class="form-group">
+			    <label for="id_schedule_send_dt" class="col-sm-3 control-label">{{ form.schedule_send_dt.label }}</label>
+			    <div class="col-sm-9">
+			      {{ form.schedule_send_dt }}
+
+					{% if form.schedule_send_dt.errors %}
+                        {% for error in form.schedule_send_dt.errors %}
+                            <span class="text-danger">{{ error }}</span>
+                        {% endfor %}
+                    {% endif %}
+
+                    {% if form.schedule_send_dt.help_text %}
+                        <span class="help-block">{{ form.schedule_send_dt.help_text|safe }}</span>
+                    {% endif %}
+			    </div>
+			 </div>
+			<div class="form-group">
+			    <label for="id_schedule_type" class="col-sm-3 control-label">{{ form.schedule_type.label }}</label>
+			    <div class="col-sm-9">
+			      {{ form.schedule_type }}
+					{% if form.schedule_type.errors %}
+                        {% for error in form.schedule_type.errors %}
+                            <span class="text-danger">{{ error }}</span>
+                        {% endfor %}
+                    {% endif %}
+
+                    {% if form.schedule_type.help_text %}
+                        <span class="help-block">{{ form.schedule_type.help_text|safe }}</span>
+                    {% endif %}
+			    </div>
+			 </div>
+			<div class="form-group">
+			    <label for="id_repeats" class="col-sm-3 control-label">{{ form.repeats.label }}</label>
+			    <div class="col-sm-9">
+			      {{ form.repeats }}
+					{% if form.repeats.errors %}
+                        {% for error in form.repeats.errors %}
+                            <span class="text-danger">{{ error }}</span>
+                        {% endfor %}
+                    {% endif %}
+
+                    {% if form.repeats.help_text %}
+                        <span class="help-block">{{ form.repeats.help_text|safe }}</span>
+                    {% endif %}
+			    </div>
+			 </div>
+		</div>
+	{% endif %}
+
+          <div class="form-group">
+            <div class="form-control">
+              <input type="checkbox" name="send_status" value="queued" />&nbsp; &nbsp;<label> *Confirm Send (Check box to Continue) </label>
+            </div>
+			{% if form.send_status.errors %}
+	            {% for error in form.send_status.errors %}
+	                <span class="text-danger">{{ error }}</span>
+	            {% endfor %}
+	        {% endif %}
+          </div>
+
+
+          <input class="btn btn-primary btn-lg pull-right" type="submit" value="{% trans 'Send Newsletter' %}" />
+
+
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_body %}
+{{ block.super }}
+    <script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+    <script type="text/javascript" src="{% static 'timepicker/timepicker.js' %}"></script>
+
+{% if schedule_enabled %}
+<script>
+    (function($) {
+		function toggle_schedule_fields(this_chk){
+			if($(this_chk).is(":checked")){
+	            $('#schedule-fields').show();
+	        }else{
+				$('#schedule-fields').hide();
+			}	
+		}
+        $(document).ready(function() {
+			toggle_schedule_fields($('#id_schedule_send'));
+            $('#id_schedule_send').click(function () {
+				toggle_schedule_fields(this);
+            });
+
+			// date and time pickers
+			$('#id_schedule_send_dt_0').datepicker({ dateFormat: 'yy-mm-dd', minDate: 0 });
+            $('#id_schedule_send_dt_1').timepicker({'timeFormat': 'h:i A'});
+        });
+    }(jQuery));
+</script>
+{% endif %}
+
+{% endblock %}

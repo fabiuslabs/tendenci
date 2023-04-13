@@ -1,0 +1,27 @@
+{% extends "state_pages/base.html" %}
+{% load base_filters %}
+
+
+{% block title %}{% trans 'My State Editor Assignments' %}{% endblock %}
+
+{% block extra_head %}
+    {{ block.super }}
+
+{% endblock extra_head %}
+
+{% block content %}
+    <h1>{% trans 'My State Editor Assignments' %}</h1>
+
+	{% if states %}
+		<ol>
+		{% for slug, state in states %}
+		<li><a href="{% url 'state_page.search' state_slug=slug %}">{{ state }}</a></li>
+		{% endfor %}
+		</ol>
+	{% endif %}
+
+{% endblock %}
+
+{% block extra_body %}
+    {{ block.super }}
+{% endblock %}

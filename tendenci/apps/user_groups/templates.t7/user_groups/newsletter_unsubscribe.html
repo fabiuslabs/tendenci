@@ -1,0 +1,50 @@
+{% extends "user_groups/base-wide.html" %}
+{% load base_tags %}
+{% load base_filters %}
+{% load user_group_tags %}
+{% load perm_tags %}
+{% load pagination_tags %}
+
+{% block title %}{% blocktrans with g=group.name %}{{ g }} - Group{% endblocktrans %}{% endblock %}
+
+{% block extra_head %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'css/usergroups.css' %}">
+{% endblock %}
+
+{% block content %}
+{% has_perm user user_groups.view_group group as can_view_group %}
+
+<div class="t">
+    <div class="group-view" style="text-align: center;">
+    	{% if unsubscribed %}
+        <h3>{% trans "You've successfully unsubscribed!" %}</h3>
+        	{% if can_view_group %}
+       		 <p>{% blocktrans with name=group.name %}You won't receive any newsletters from the group "{{ name }}".{% endblocktrans %}</p>
+       		 {% else %}
+       		 <p>{% blocktrans %}You won't receive any newsletters from this group.{% endblocktrans %}</p>
+       		 {% endif %}
+        {% else %}
+        <h3>{% trans 'Unsubscribe Newsletters' %}</h3>
+        <p>
+        	{% if can_view_group %}
+        	{% blocktrans with name=group.name %}Are you sure you want to unsubscribe Newsletters from the group "{{ name }}"?{% endblocktrans %}
+        	{% else %}
+        	{% blocktrans %}Are you sure you want to unsubscribe Newsletters from this group?{% endblocktrans %}
+        	{% endif %}
+        </p>
+        <p>&nbsp;</p>
+        <div class="delete-form">
+            <form name="article-delete" method="POST" action="">{% csrf_token %}
+                <input type="hidden" name="action" value="delete">
+                <input class="btn btn-primary" type="submit" name="submit" value="{% trans 'Yes, unsubscribe me!' %}">
+            </form>
+        </div>
+        {% endif %}
+        
+        <br><br><br><br><br>
+    </div>
+</div>
+
+
+{% endblock %}

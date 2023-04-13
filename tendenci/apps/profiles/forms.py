@@ -13,6 +13,7 @@ from django.db.models import Q
 
 from tendenci.apps.base.fields import EmailVerificationField, CountrySelectField, StateSelectField
 from tendenci.apps.base.utils import normalize_field_names
+from tendenci.apps.memberships.forms import assign_search_fields
 from tendenci.apps.perms.forms import TendenciBaseForm
 from tendenci.apps.site_settings.utils import get_setting
 from tendenci.apps.user_groups.models import Group, GroupMembership
@@ -41,9 +42,9 @@ PASSWORD_HELP_TEXT_DEFAULT = _('Password must contain at least 1 number or 1 spe
 class ProfileSearchForm(FormControlWidgetMixin, forms.Form):
     SEARCH_CRITERIA_CHOICES = (
                         ('', _('SELECT ONE')),
-                        ('first_name', _('First Name')),
-                        ('last_name', _('Last Name')),
-                        ('email', _('Email')),
+                        #('first_name', _('First Name')),
+                        #('last_name', _('Last Name')),
+                        #('email', _('Email')),
                         ('username', _('Username')),
                         ('member_number', _('Member Number')),
                         ('company', _('Company')),
@@ -53,7 +54,7 @@ class ProfileSearchForm(FormControlWidgetMixin, forms.Form):
                         ('city', _('City')),
                         ('region', _('Region')),
                         ('county', _('County')),
-                        ('state', _('State')),
+                        #('state', _('State')),
                         ('zipcode', _('Zip Code')),
                         ('country', _('Country')),
                         ('spouse', _('Spouse'))
@@ -72,19 +73,34 @@ class ProfileSearchForm(FormControlWidgetMixin, forms.Form):
     membership_type = forms.IntegerField(required=False)
     group = forms.IntegerField(required=False)
     industry = forms.IntegerField(required=False)
+    state = StateSelectField(required=False)
     search_criteria = forms.ChoiceField(choices=SEARCH_CRITERIA_CHOICES,
                                         required=False)
     search_text = forms.CharField(max_length=100, required=False)
+
+    joined_start = forms.DateField(required=False)
+    joined_end = forms.DateField(required=False)
+
+    joined_start.widget.attrs.update({'class': 'datepicker form-control'})
+    joined_end.widget.attrs.update({'class': 'datepicker form-control'})
 #     search_method = forms.ChoiceField(choices=SEARCH_METHOD_CHOICES,
 #                                         required=False)
 
     def __init__(self, *args, **kwargs):
         mts = kwargs.pop('mts')
         self.user = kwargs.pop('user')
+
+        memberapp_fields = kwargs.pop('memberapp_fields', [])
+
         super(ProfileSearchForm, self).__init__(*args, **kwargs)
+
+        assign_search_fields(self, memberapp_fields)
+        self.memberapp_fields = [self[field_name] for field_name in [app_field.field_name for app_field in memberapp_fields]]
+
         self.fields['first_name'].widget.attrs.update({'placeholder': _('Enter first name')})
         self.fields['last_name'].widget.attrs.update({'placeholder': _('Enter last name')})
         self.fields['email'].widget.attrs.update({'placeholder': _('Enter email')})
+        self.fields['state'].widget.attrs.update({'class': 'form-control'})
 
         if not mts:
             del self.fields['membership_type']
@@ -132,7 +148,6 @@ class ProfileForm(TendenciBaseForm):
 
     initials = forms.CharField(label=_("Initial"), max_length=50, required=False,
                                widget=forms.TextInput(attrs={'size':'10'}))
-    account_id = forms.IntegerField(label=_("Account ID"), required=False)
     display_name = forms.CharField(label=_("Display name"), max_length=100, required=False,
                                widget=forms.TextInput(attrs={'size':'30'}))
 
@@ -208,7 +223,6 @@ class ProfileForm(TendenciBaseForm):
         fields = ('salutation',
                   'first_name',
                   'last_name',
-                  'account_id',
                   'username',
                   'password1',
                   'password2',
@@ -313,7 +327,6 @@ class ProfileForm(TendenciBaseForm):
                 del self.fields['admin_notes']
                 del self.fields['security_level']
                 del self.fields['status_detail']
-                del self.fields['account_id']
 
             if self.user_current.profile.is_superuser and self.user_current == self.user_this:
                 self.fields['security_level'].choices = (('superuser',_('Superuser')),)
@@ -350,7 +363,7 @@ class ProfileForm(TendenciBaseForm):
                                                     required=self.fields['state_2'].required)
             self.fields['state'].widget.attrs.update({'class': 'form-control'})
             self.fields['state_2'].widget.attrs.update({'class': 'form-control'})
-            
+
 
     def clean_username(self):
         """
@@ -750,7 +763,7 @@ class ValidatingPasswordChangeForm(auth.forms.PasswordChangeForm):
                 self.password_help_text = self.fields['new_password1'].help_text
             else:
                 self.password_help_text = PASSWORD_HELP_TEXT_DEFAULT
-            
+
         self.fields['new_password1'].help_text = self.password_help_text
 
     def clean_new_password1(self):

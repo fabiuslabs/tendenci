@@ -29,7 +29,7 @@ from tendenci.apps.events.models import (
     Sponsor, Organizer, Speaker, Type, TypeColorSet,
     RegConfPricing, Addon, AddonOption, CustomRegForm,
     CustomRegField, CustomRegFormEntry, CustomRegFieldEntry,
-    RecurringEvent, Registrant
+    RecurringEvent, Registrant, Volunteer
 )
 
 from tendenci.libs.form_utils.forms import BetterModelForm
@@ -678,6 +678,7 @@ class EventForm(TendenciBaseForm):
         widget=forms.DateInput(attrs={'class':'datepicker'}))
     recurs_on = forms.ChoiceField(label=_('Recurs On'), widget=forms.RadioSelect, initial='weekday',
         choices=(('weekday', _('the same day of the week')),('date',_('the same date')),))
+    volunteer_enabled = forms.BooleanField(label=_('Is Volunteer Enabled?'), required=False, initial=True)
 
     status_detail = forms.ChoiceField(
         choices=(('active',_('Active')),
@@ -713,6 +714,7 @@ class EventForm(TendenciBaseForm):
             'enable_private_slug',
             'private_slug',
             'status_detail',
+            'volunteer_enabled',
             )
         widgets = {
             'private_slug': forms.HiddenInput()
@@ -743,6 +745,7 @@ class EventForm(TendenciBaseForm):
                                   'external_url',
                                   'photo_upload',
                                   'tags',
+                                  'volunteer_enabled',
                                  ],
                       'legend': ''
                       }),
@@ -1727,11 +1730,8 @@ class RegistrationForm(forms.Form):
         override_table = self.cleaned_data['override_table']
         override_price_table = self.cleaned_data['override_price_table']
 
-        if override_table:
-            if override_price_table is None:
-                raise forms.ValidationError(_('Override is checked, but override price is not specified.'))
-            elif  override_price_table < 0:
-                raise forms.ValidationError(_('Override price must be a positive number.'))
+        if override_table and override_price_table <0:
+            raise forms.ValidationError(_('Override price must be a positive number.'))
         return override_price_table
 
 
@@ -2168,6 +2168,26 @@ class MessageAddForm(forms.ModelForm):
         else:
             self.fields['body'].widget.mce_attrs['app_instance_id'] = 0
 
+
+class MessageVolunteerAddForm(forms.ModelForm):
+    subject = forms.CharField(widget=forms.TextInput(attrs={'style':'width:100%;padding:5px 0;'}))
+    body = forms.CharField(widget=TinyMCE(attrs={'style':'width:100%'},
+        mce_attrs={'storme_app_label':Email._meta.app_label,
+        'storme_model':Email._meta.model_name.lower()}),
+        label=_('Email Content'))
+
+    class Meta:
+        model = Email
+        fields = ('subject', 'body',)
+
+    def __init__(self, event_id=None, *args, **kwargs):
+        super(MessageVolunteerAddForm, self).__init__(*args, **kwargs)
+        if self.instance.id:
+            self.fields['body'].widget.mce_attrs['app_instance_id'] = self.instance.id
+        else:
+            self.fields['body'].widget.mce_attrs['app_instance_id'] = 0
+
+
 class EmailForm(forms.ModelForm):
     #events = forms.CharField()
     body = forms.CharField(widget=TinyMCE(attrs={'style':'width:100%'},
@@ -2515,3 +2535,41 @@ class EventReportFilterForm(forms.Form):
                 return queryset
 
         return None
+
+
+class VolunteerForm(forms.ModelForm):
+
+    label = 'Volunteer'
+
+    class Meta:
+        model = Volunteer
+
+        fields = (
+            'event',
+            'user',
+            'first_name',
+            'last_name',
+            'email',
+            'phone',
+            'company_name',
+            'comments',
+        )
+
+
+class EventVolunteerSearchForm(forms.Form):
+    SEARCH_METHOD_CHOICES = (
+                             ('starts_with', _('Starts With')),
+                             ('contains', _('Contains')),
+                             ('exact', _('Exact')),
+                             )
+    SEARCH_CRITERIA_CHOICES = (('', 'SELECT ONE'),
+                               ('first_name', _('First Name')),
+                               ('last_name', _('Last Name')),
+                               ('company_name', _('Company Name')),
+                               ('phone', _('Phone')),
+                               ('email', _('Email')),)
+    search_criteria = forms.ChoiceField(choices=SEARCH_CRITERIA_CHOICES,
+                                        required=False)
+    search_text = forms.CharField(max_length=100, required=False)
+    search_method = forms.ChoiceField(choices=SEARCH_METHOD_CHOICES,
+                                        required=False)

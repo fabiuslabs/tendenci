@@ -7,9 +7,9 @@ class Command(BaseCommand):
     """
     def handle(self, *args, **options):
         from django.contrib.auth.management import create_permissions
-        from django.db.models import get_apps
+        from django.apps import apps
 
         verbosity = int(options['verbosity'])
 
-        for app in get_apps():
-            create_permissions(app, None, verbosity)
+        for app in apps.get_app_configs():
+            create_permissions(app, verbosity=verbosity)

@@ -1,7 +1,7 @@
 [
 {
     "fields": {
-        "membership_type": 3,
+        "membership_type": 1,
         "creator": 1,
         "allow_user_view": true,
         "apply_cap": true,
@@ -17,8 +17,8 @@
         "status": true,
         "admin_only": false,
         "description": "This is the membership type for the Corporation/Organization. Many associations set multiple levels (types) of Corporate Membership with different benefits.",
-        "price": "20000.00",
-        "renewal_price": "20000.00",
+        "price": "0.00",
+        "renewal_price": "0.00",
         "status_detail": "active",
         "creator_username": "system_generated",
         "above_cap_price": "0.00",
@@ -329,7 +329,7 @@
         "payment_methods": [
             2
         ],
-        "memb_app": 2,
+        "memb_app": 1,
         "allow_member_edit": false
     },
     "model": "corporate_memberships.corpmembershipapp",

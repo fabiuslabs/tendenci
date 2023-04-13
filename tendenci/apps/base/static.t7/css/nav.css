@@ -1,1 +1,13 @@
-../../../../themes/t7-base/static/css/nav.css
+#t-main-navbar-brand {
+    height: 100%;
+}
+
+#t-main-navbar-brand > a {
+    display: block;
+    line-height: 100%;
+}
+
+
+#t-main-navbar-collapse {
+    margin-top: 26px;
+}

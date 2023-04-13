@@ -147,6 +147,11 @@ urlpatterns = [
 
     re_path(r'^%s/(?P<id>\d+)/(?P<private_slug>\w+)/$' % urlpath, views.details, name='event.private_details'),
 
+    # volunteer for event
+    re_path(r'^%s/volunteer/(?P<event_id>\d+)/$' % urlpath, views.volunteer, name='event.volunteer'),
+    # volunteers (search/view); admin and chapter-admin only
+    re_path(r'^%s/(?P<event_id>\d+)/volunteers/search/$' % urlpath, views.volunteer_search, name="event.volunteer.search"),
+
     # addons
     re_path(r'^%s/(?P<event_id>\d+)/addons/list/$' % urlpath, views.list_addons, name='event.list_addons'),
     re_path(r'^%s/(?P<event_id>\d+)/addons/add/$' % urlpath, views.add_addon, name='event.add_addon'),
@@ -163,6 +168,9 @@ urlpatterns = [
 
     # email registrants
     re_path(r'^%s/message/(?P<event_id>\d+)/$' % urlpath, views.message_add, name='event.message'),
+
+    # email volunteers
+    re_path(r'^%s/message_to_volunteers/(?P<event_id>\d+)/$' % urlpath, views.message_to_volunteers_add, name='event.message_to_volunteers'),
 
     # custom registration form preview
     re_path(r'^%s/custom_reg_form/preview/(?P<id>\d+)/$' % urlpath, views.custom_reg_form_preview, name='event.custom_reg_form_preview'),

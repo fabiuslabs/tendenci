@@ -13,7 +13,7 @@ from tendenci.apps.corporate_memberships.models import (
     CorpMembershipAppField,
     CorpMembership,
     CorpMembershipRep,
-    CorpProfile, CorpProduct, Branch,
+    CorpProfile, CorpProduct,
     Notice)
 from tendenci.apps.corporate_memberships.forms import (
     CorporateMembershipTypeForm,
@@ -21,7 +21,7 @@ from tendenci.apps.corporate_memberships.forms import (
     NoticeForm,
     CorpMembershipAppFieldAdminForm,
     CorpProfileAdminForm,
-    CorpProductForm, BranchAdminForm)
+    CorpProductForm)
 from tendenci.apps.perms.admin import TendenciBaseModelAdmin
 
 from tendenci.apps.base.utils import tcurrency
@@ -219,7 +219,6 @@ approve_selected.short_description = u'Approve selected'
 
 class CorpMembershipAdmin(TendenciBaseModelAdmin):
     list_display = ['profile',
-                    'account_id',
                     'statusdetail',
                     'parent_entity',
                     'cm_type',
@@ -231,7 +230,7 @@ class CorpMembershipAdmin(TendenciBaseModelAdmin):
                     'roster_link',
                     'invoice_url']
     list_filter = ['corporate_membership_type', StatusDetailFilter, 'join_dt', 'expiration_dt']
-    search_fields = ['corp_profile__name', 'corp_profile__account_id']
+    search_fields = ['corp_profile__name']
 
     actions = [approve_selected,]
 
@@ -247,11 +246,6 @@ class CorpMembershipAdmin(TendenciBaseModelAdmin):
                     ).exclude(status_detail='archive'
                               ).order_by('status_detail',
                                          'corp_profile__name')
-
-    def account_id(self, instance):
-        return instance.corp_profile.account_id
-    account_id.short_description = _('Account ID')
-    account_id.admin_order_field = 'corp_profile__account_id'
 
     @mark_safe
     def profile(self, instance):
@@ -585,28 +579,15 @@ class ProductInline(admin.TabularInline):
     verbose_name_plural = 'Products'
 
 
-class BranchInlineAdmin(admin.StackedInline):
-    model = Branch
-    fields = ('name', 'address', 'city', 'state', 'zip',
-              'country', 'phone', 'fax')
-    extra = 1
-    verbose_name = _('Branch')
-    verbose_name_plural = _('Branches')
-    ordering = ("name",)
-    form = BranchAdminForm
-
-
 class CorpProfileAdmin(TendenciBaseModelAdmin):
     model = CorpProfile
     list_display = ['name',]
     search_fields = ('name',)
-    inlines = (CorpMembershipRepInlineAdmin, BranchInlineAdmin,
-               CorpMembershipInlineAdmin)
+    inlines = (CorpMembershipRepInlineAdmin, CorpMembershipInlineAdmin)
     if get_setting('module', 'corporate_memberships', 'useproducts'):
         inlines = (ProductInline,) + inlines
     fieldsets = [(_('Company Details'), {
                       'fields': ('name',
-                                 'account_id',
                                  'logo_file',
                                  'url',
                                  'number_employees',
@@ -639,7 +620,6 @@ class CorpProfileAdmin(TendenciBaseModelAdmin):
         Update the permissions backend and log the event
         """
         instance = form.save(commit=False)
-        instance.owner = request.user
         update_perms_and_save(request, form, instance)
         
         form.save_logo(instance, request.user)

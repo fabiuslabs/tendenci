@@ -29,6 +29,7 @@ from django.db.models.functions import Lower
 # from django.utils.decorators import method_decorator
 from django.http import JsonResponse
 import simplejson
+from localflavor.us.us_states import US_STATES
 
 from tendenci.apps.theme.shortcuts import themed_response as render_to_resp
 
@@ -58,9 +59,11 @@ UserMembershipForm, ProfileMergeForm, ProfileSearchForm, UserUploadForm,
 ActivateForm, PhotoUploadForm)
 from tendenci.apps.profiles.utils import get_member_reminders, ImportUsers
 from tendenci.apps.events.models import Registrant
-from tendenci.apps.memberships.models import MembershipType
+from tendenci.apps.memberships.models import MembershipType, MembershipAppField, get_searchable_membershipapp_fields, \
+    filter_qset_by_searchable_memberapp_fields
 from tendenci.apps.memberships.forms import EducationForm
 from tendenci.apps.invoices.models import Invoice
+from tendenci.apps.chapters.models import Chapter, CoordinatorUser, Officer, ChapterMembership
 
 try:
     from tendenci.apps.notifications import models as notification
@@ -82,21 +85,21 @@ def profile_photo_upload(request, id=None, template_name='profiles/upload_photo.
 
     if not profile.allow_edit_by(request.user):
         raise Http403
- 
+
     upload_form=PhotoUploadForm(request.POST or None,
                                      request.FILES or None,
                                      instance=profile,)
     if request.method == "POST":
         if upload_form.is_valid():
             profile = upload_form.save()
- 
+
             EventLog.objects.log()
             if request.is_ajax():
                 return JsonResponse({
                         'status': 'success',
                         'message': 'Profile Photo Uploaded Successfully'
                     }, status=200)
-            
+
             messages.success(request, _("Successfully uploaded your profile photo."))
             return HttpResponseRedirect(reverse('profile', args=[profile.user.username]))
         else:
@@ -109,7 +112,7 @@ def profile_photo_upload(request, id=None, template_name='profiles/upload_photo.
                             'status': 'failed',
                             'message': 'Invalid Photo: ' + err
                         }, status=200)
-     
+
     return render_to_resp(request=request, template_name=template_name,
         context={
             'upload_form': upload_form,
@@ -229,6 +232,13 @@ def index(request, username='', template_name="profiles/index.html"):
     else:
         industries = None
 
+    chapter_slug = ''
+    if len(profile.chapter_memberships()) > 0:
+        profile_chapter_id = profile.chapter_memberships()[0].chapter_id
+        user_chapter = Chapter.objects.get(pk=profile_chapter_id)
+        chapter_slug = user_chapter.slug
+
+
     return render_to_resp(request=request, template_name=template_name, context={
         'can_edit': can_edit,
         "user_this": user_this,
@@ -248,7 +258,8 @@ def index(request, username='', template_name="profiles/index.html"):
         'membership_reminders': membership_reminders,
         'can_auto_renew': can_auto_renew,
         'auto_renew_is_set': auto_renew_is_set,
-        'recurring_payments': recurring_payments
+        'recurring_payments': recurring_payments,
+        'chapter_slug': chapter_slug
         })
 
 
@@ -277,6 +288,38 @@ def search(request, memberships_search=False, template_name="profiles/search.htm
             else:  # if just user
                 if not allow_user_search:
                     raise Http403
+
+    if request.user.is_superuser:
+        states = None
+    else:
+        states = [
+            coord.coordinating_agency.state
+            for coord in
+            CoordinatorUser.objects.filter(user=request.user)
+        ]
+
+    chapter_member_filter = None
+
+    # empty state list, and not super; only one test left
+    if states is not None and not len(states):
+        if get_setting('module', 'chapters', 'enabled'):
+            offices = Officer.objects.filter(user=request.user)
+            chapters = [office.chapter for office in offices]
+            chapter_memberships = [
+                ChapterMembership.objects.filter(chapter=chapter).values('user')
+                for chapter in chapters
+            ]
+
+            for member_qset in chapter_memberships:
+                if chapter_member_filter is None:
+                    chapter_member_filter = Q(user__in=member_qset)
+                else:
+                    chapter_member_filter |= Q(user__in=member_qset)
+
+    # state coordinator, but no assigned states,
+    # or not a chapter officer
+    if states is not None and not len(states) and chapter_member_filter is None:
+        raise Http403
 
     # decide whether or not to display the membership types drop down
     display_membership_type = False
@@ -309,7 +352,16 @@ def search(request, memberships_search=False, template_name="profiles/search.htm
     show_member_option = mts
     show_industry = get_setting('module', 'users', 'showindustry')
 
-    form = ProfileSearchForm(request.GET, mts=mts, user=request.user)
+    form = ProfileSearchForm(
+        request.GET,
+        mts=mts,
+        user=request.user,
+        memberapp_fields=get_searchable_membershipapp_fields()
+    )
+
+    if states:
+        form.fields['state'].choices = list([tup for tup in US_STATES if tup[0] in states])
+
     if form.is_valid():
         first_name = form.cleaned_data['first_name']
         last_name = form.cleaned_data['last_name']
@@ -325,6 +377,10 @@ def search(request, memberships_search=False, template_name="profiles/search.htm
         industry = form.cleaned_data.get('industry', False)
         if industry:
             industry = int(industry)
+        state = form.cleaned_data['state']
+        joined_start = form.cleaned_data.get('joined_start', None)
+        joined_end = form.cleaned_data.get('joined_end', None)
+        memberapp_fields = {f.name: form.cleaned_data.get(f.name) for f in form.memberapp_fields}
     else:
         first_name = None
         last_name = None
@@ -336,6 +392,10 @@ def search(request, memberships_search=False, template_name="profiles/search.htm
         member_only = False
         group = False
         industry = False
+        state = None
+        joined_start = None
+        joined_end = None
+        memberapp_fields = dict()
 
     profiles = Profile.objects.filter(Q(status=True))
     if memberships_search:
@@ -392,6 +452,16 @@ def search(request, memberships_search=False, template_name="profiles/search.htm
         profiles = profiles.filter(user__last_name__istartswith=last_name)
     if email:
         profiles = profiles.filter(user__email__istartswith=email)
+    if states is not None and len(states) and not state:
+        state = states[0]
+    if state:
+        profiles = profiles.filter(state=state)
+    if joined_start:
+        profiles = profiles.filter(create_dt__gte=joined_start)
+    if joined_end:
+        profiles = profiles.filter(create_dt__lte=joined_end)
+    if chapter_member_filter:
+        profiles = profiles.filter(chapter_member_filter)
 
     if member_only:
         profiles = profiles.exclude(member_number='')
@@ -421,6 +491,8 @@ def search(request, memberships_search=False, template_name="profiles/search.htm
 
     if industry:
         profiles = profiles.filter(industry_id=industry)
+
+    profiles = filter_qset_by_searchable_memberapp_fields(profiles, memberapp_fields)
 
     profiles = profiles.order_by('user__last_name', 'user__first_name')
     base_template = 'profiles/base-wide.html'
@@ -1673,7 +1745,7 @@ def download_user_template(request):
 
     filename = "users_import_template.csv"
 
-    title_list = ['account_id', 'salutation', 'first_name', 'last_name',
+    title_list = ['salutation', 'first_name', 'last_name',
                          'initials', 'display_name', 'email',
                           'email2', 'address', 'address2',
                           'city', 'state', 'zipcode', 'country',
@@ -1703,10 +1775,10 @@ def activate_email(request):
         username = form.cleaned_data['username']
         u = None
         if email and username:
-            [u] = User.objects.filter(is_active=False, email__iexact=email, username=username)[:1] or [None]
+            [u] = User.objects.filter(is_active=False, email=email, username=username)[:1] or [None]
 
         if email and not u:
-            [u] = User.objects.filter(is_active=False, email__iexact=email).order_by('-is_active')[:1] or [None]
+            [u] = User.objects.filter(is_active=False, email=email).order_by('-is_active')[:1] or [None]
 
         if u:
             [rprofile] = RegistrationProfile.objects.filter(user=u)[:1] or [None]

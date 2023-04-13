@@ -45,6 +45,10 @@ class SearchResultNode(IncludeNode):
                 var_name = 'corporate_membership'
             if var_name == 'photo':
                 var_name = 'photo_set'
+            if var_name == 'chapter_page':
+                var_name = 'page'
+            if var_name == 'state_page':
+                var_name = 'page'
             if var_name == 'photo_album':
                 #special case since Image and PhotoSet share the same app.
                 var_name = 'photo_set'
@@ -73,7 +77,7 @@ class SearchResultNode(IncludeNode):
             })
 
             return t.render(context=context)
-        except:
+        except Exception as e:
             return ''
 
 def search_result(parser, token):

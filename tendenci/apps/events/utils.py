@@ -702,6 +702,26 @@ def email_registrants(event, email, **kwargs):
 
         email.body = tmp_body  # restore to the original
 
+
+def email_volunteers(event, email, **kwargs):
+    volunteers = event.volunteers()
+    tmp_body = email.body
+
+    for volunteer in volunteers:
+        first_name = volunteer.first_name
+        last_name = volunteer.last_name
+
+        email.recipient = volunteer.email
+
+        if email.recipient:
+            email.body = email.body.replace('[firstname]', first_name)
+            email.body = email.body.replace('[lastname]', last_name)
+
+            email.send()
+
+        email.body = tmp_body  # restore to the original
+
+
 def email_admins(event, total_amount, self_reg8n, reg8n, registrants):
     site_label = get_setting('site', 'global', 'sitedisplayname')
     site_url = get_setting('site', 'global', 'siteurl')

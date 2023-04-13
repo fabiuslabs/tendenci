@@ -1,0 +1,12 @@
+{% load base_filters %}
+<div id="volunteer_summary">
+    <ul>
+        {% for field in form %}
+            {% if field.name in ignore_fields %}
+            {% else %}
+                <li>{{ field.label }}:  {{ field.value|field_to_string }}</li>
+            {% endif %}
+        {% endfor %}
+
+    </ul>
+</div>

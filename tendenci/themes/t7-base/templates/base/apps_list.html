@@ -13,7 +13,7 @@
 
         <ul>
             {% for app in registered_apps.all_apps %}
-                {% if app.enabled %}
+                {% if app.enabled and not app.url.omit %}
                     {% if app.url.list or app.url.search %}
                         <li><a href="{% firstof app.url.list app.url.search %}">{{ app|title }}</a></li>
                     {% endif %}

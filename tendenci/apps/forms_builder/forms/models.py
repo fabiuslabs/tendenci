@@ -65,8 +65,6 @@ FIELD_FUNCTIONS = (
     ("company", _("Company")),
     ("address", _("Address")),
     ("city", _("City")),
-    ("county", _("County")),
-    ("country", _("Country")),
     ("region", _("Region")),
     ("state", _("State")),
     ("zipcode", _("Zip")),
@@ -515,12 +513,6 @@ class FormEntry(models.Model):
     def get_city(self):
         return self.get_value_of("city")
 
-    def get_county(self):
-        return self.get_value_of("county")
-
-    def get_country(self):
-        return self.get_value_of("country")
-
     def get_region(self):
         return self.get_value_of("region")
 
@@ -623,8 +615,6 @@ class FormEntry(models.Model):
                                                 address=self.get_address(),
                                                 company=self.get_company(),
                                                 city=self.get_city(),
-                                                county=self.get_county(),
-                                                country=self.get_country(),
                                                 region=self.get_region(),
                                                 state=self.get_state(),
                                                 zipcode=self.get_zipcode(),

@@ -189,7 +189,7 @@ INSTALLED_APPS = [
     'django_otp.plugins.otp_email',
     'django_otp.plugins.otp_static',
     'two_factor',
-    'two_factor.plugins.email', 
+    'two_factor.plugins.email',
 
     'tendenci.libs.model_report',
     'tendenci.libs.tinymce',
@@ -267,6 +267,7 @@ INSTALLED_APPS = [
     'tendenci.apps.forums',
     'tendenci.apps.committees',
     'tendenci.apps.chapters',
+    'tendenci.apps.chapter_pages',
     'tendenci.apps.case_studies',
     'tendenci.apps.donations',
     'tendenci.apps.speakers',
@@ -276,6 +277,7 @@ INSTALLED_APPS = [
     'tendenci.apps.testimonials',
     'tendenci.apps.social_services',
     'tendenci.apps.products',
+    'tendenci.apps.state_pages',
 
     # Django SQL Explorer
     'tendenci.apps.explorer_extensions',
@@ -572,12 +574,6 @@ NEWSLETTER_EMAIL_BACKEND = 'tendenci.apps.emails.backends.NewsletterEmailBackend
 
 NEWSLETTER_SCHEDULE_ENABLED = False
 
-# If True, it allows members to send emails to corporate membership reps
-# (default to False).
-# Why here not in site settings? Because we don't want this feature to be 
-# turned on lightly. Extra caution is needed.
-BROADCAST_EMAIL_ENABLED = False
-
 # Mobile App
 MOBILE_COOKIE_NAME = "tendenci_mobile"
 
@@ -726,7 +722,7 @@ STRIPE_API_VERSION = '2019-08-14'
 
 # List of merchant accounts you can set up.
 # If you want to set up multiple payment methods (gateways) for memberships,
-# the machine name of the payment methods specified should be in this list. 
+# the machine name of the payment methods specified should be in this list.
 MERCHANT_ACCOUNT_NAMES = ('stripe', 'authorizenet', 'firstdatae4', 'paypal')
 
 
@@ -829,3 +825,7 @@ try:
     }
 except ImportError:
     pass
+
+PERMISSION_TRACER_ENABLED = False
+if PERMISSION_TRACER_ENABLED:
+    MIDDLEWARE += ['tendenci.debug.perm_tracer.PermTracerMiddleware']

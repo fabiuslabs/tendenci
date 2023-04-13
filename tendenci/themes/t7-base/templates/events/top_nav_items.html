@@ -262,10 +262,26 @@
                                 </li>
                             {% endif %}
 
+                            {% if can_edit_event or can_view_volunteer %}
+                                <li class="content-item">
+                                    <span class="app-name">
+                                        <a href="{% url 'event.volunteer.search' app_object.pk %}">{% trans "Search Volunteers" %}</a>
+                                    </span>
+                                </li>
+                            {% endif %}
+
                             {% if can_edit_event %}
                                 <li class="content-item">
                                     <span class="app-name">
                                         <a href="{% url 'event.message' app_object.pk %}">{% trans "E-mail Registrants" %}</a>
+                                    </span>
+                                </li>
+                            {% endif %}
+
+                            {% if can_edit_event %}
+                                <li class="content-item">
+                                    <span class="app-name">
+                                        <a href="{% url 'event.message_to_volunteers' app_object.pk %}">{% trans "E-mail Volunteers" %}</a>
                                     </span>
                                 </li>
                             {% endif %}

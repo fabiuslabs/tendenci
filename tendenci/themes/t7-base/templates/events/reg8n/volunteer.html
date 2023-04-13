@@ -1,0 +1,173 @@
+{% extends "events/base-wide.html" %}
+{% load event_tags %}
+{% load event_filters %}
+{% load styled_forms %}
+{% load base_filters %}
+
+{% block title %}{{ block.super }}{% trans "Volunteer" %} {{ event.title }} {{ event.start_dt|date:"M j, Y" }}{% endblock %}
+
+{% block extra_head %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'css/events.css' %}" />
+<link rel="stylesheet" href="{% static 'css/event-registration.css' %}" />
+<link rel="stylesheet" href="{% static 'css/event-addons.css' %}" />
+<link rel="stylesheet" href="{% static 'css/events-reg.css' %}" />
+
+<style type="text/css">
+    input.registrant-pricing {
+        float: left;
+    }
+    .addon-forms .label{
+    	color: #000;
+    }
+    ul.registrant-pricing, .registrant-form ul{
+    	list-style: none;
+    }
+    .input-group-addon{
+    	width: auto;
+    }
+    .gratuity-section{
+    	margin: 2em;
+    	padding: 1em;
+    	border: 1px solid #999;
+    	border-radius: 5px;
+    	box-shadow: 0 2px 5px #eee;
+    }
+    #id_gratuity, #id_gratuity_preferred{
+    	text-align: center;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="t">
+    <h1>{% trans "Volunteer" %}</h1>
+    <div>
+        <div class="event-title"><a href="{% url "event" event.id %}">{{ event.title }}</a></div>
+        <div class="event-time">
+            <div class="line">{{ event.start_dt|date:"M j, Y" }}</div>
+            <div class="line"> {% if not event.all_day %}
+            {{ event.start_dt|date:"P" }} - {{ event.end_dt|date:"P" }}{% endif %}</div>
+        </div>
+    </div>
+
+    {% if event|is_volunteer:request.user %}
+        <div class="alert alert-warning alert-dismissible" role="alert">
+        <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        {% trans "You have already volunteered" %}
+        </div>
+    {% endif %}
+
+    {% if form.errors.values %}
+        <div class="errors-box">
+            <ul>
+                {{ form.non_field_errors }}
+                {% for field in form %}
+                    {% if field.errors %}
+                        {% for error in field.errors %}
+                        <li>{{ field.label_tag }}  &ndash; {{ error }}</li>
+                        {% endfor %}
+                    {% endif %}
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
+
+    <div class="form-wrap">
+        <form id="volunteer-form" action="" method="post">{% csrf_token %}
+        <div class="forms" id="fillup-div">
+
+            <div id="reg-form-wrap">
+                <div class="float-anchor"><!-- ie7 fix --></div>
+                <div class="float-window">
+               </div>  {# float-widow#}
+            </div>
+
+            <div id="registrant-forms">
+                <div class="registrant-form">
+                    <div class="odd-registrant">
+                        {% for field in form %}
+                            {% if field.name in ignore_fields %}
+                                {{ field.as_hidden }}
+                            {% elif field.name == 'reminder' %}
+                            <div class=" form-field reminder">
+                                <div class="error">{{ field.errors }}</div>
+                                <div>{{ field }} <label for="id_volunteer-reminder">{{ field.label }}</label></div>
+                                <div class="help-text">{{ field.help_text }}</div>
+                            </div>
+                            {% else %}
+                            <div class="form-field">
+                                {% if field|is_checkbox %}
+                                <div class="checkbox-input">
+                                    <div class="error">{{ field.errors }}</div>
+                                    <div class="field">{{ field }}</div>
+                                    <div class="form-label {% if field.field.required %} required{% endif %}">{{ field.label }}</div>
+                                    {% if field.help_text %}
+                                    <div class="help-text">{{ field.help_text }}</div>
+                                    {% endif %}
+                                </div>
+                                <div style="clear: both"><!-- IE7 --></div>
+                                {% else%}
+                                {% if field.errors %}
+                                <div class="error">{{ field.errors }}</div>
+                                {% endif %}
+                                <div class="form-label {% if field.field.required %} required{% endif %}">{{ field.label }}</div>
+                                <div class="field">{{ field }}</div>
+                                {% endif %}
+                                {% if field.help_text %}
+                                <div class="help-text">{{ field.help_text }}</div>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="add-registrant-box">
+                <input class="btn btn-primary" type="submit" name="commit" id="volunteer-form-button" class="registration-green-button" value="{% trans 'Volunteer'%}" />
+            </div>
+
+        </div>
+        {% if do_confirmation %}
+        <div class="forms" id="confirm-div">
+            <div>
+                <p><strong>{% trans "Please review the following." %}</strong></p>
+                <p class="cls-paragraph-warning"><strong>{% trans 'Your volunteer will not be completed until you click "Confirm My Volunteer" at the bottom of this page.' %}</strong></p>
+                {% include "events/reg8n/volunteer_summary_preview.html" %}
+            </div>
+            
+            <input type="hidden" name="confirmed" />
+            <div class="clear"></div>
+            <input class="btn btn-success" type="submit" name="commit" value="{% trans 'Confirm My Volunteer' %}" />
+           <br /><br />
+            <div class="clear"></div>
+        </div>
+        {% endif %}
+        </form>
+        <div style="display:none">
+            {% include 'events/registration/base_forms.html' %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_body %}
+<script type="text/javascript" src="{% static 'js/email-verification.js' %}"></script>
+<script type="text/javascript">
+    {% include 'events/include/events-registration-summary.js' %}
+    {% include 'events/reg8n/include/register-registrant.js' %}
+    {% include 'events/addons/register-addon.js' %}
+    {% include 'events/reg8n/include/register.js' %}
+    {% if do_confirmation %}
+    $(document).ready(function(){
+        $('#fillup-div').addClass('event-registration-hidden');
+
+    });
+    {% endif %}
+
+</script>
+
+{{ block.super }}
+{% endblock %}

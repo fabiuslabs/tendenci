@@ -5,6 +5,7 @@ from django.urls import reverse
 from django.contrib.auth.models import User
 from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
+from localflavor.us.us_states import US_STATES
 
 from tendenci.apps.entities.managers import EntityManager
 
@@ -37,7 +38,7 @@ class Entity(models.Model):
     summary = models.TextField(blank=True)
     notes = models.TextField(blank=True)
     admin_notes = models.TextField(_('Admin Notes'), blank=True)
-    
+
     show_for_donation = models.BooleanField(_('Use for Donation Allocation'), default=False,
             help_text=_('If checked, it will appear as an option for donation allocation on the donation form.'),)
 
@@ -87,9 +88,8 @@ class Entity(models.Model):
         if user.is_authenticated:
             creator_owner_q = (Q(creator=user) | Q(owner=user))
             if user.profile.is_member:
-                return  Q(status=True) & Q(status_detail='active') & ((Q(allow_member_view=True) | Q(allow_user_view=True) | Q(allow_anonymous_view=True)) | creator_owner_q)
+                return Q(status=True) & Q(status_detail='active') & ((Q(allow_member_view=True) | Q(allow_user_view=True) | Q(allow_anonymous_view=True)) | creator_owner_q)
             else:
-                return  Q(status=True) & Q(status_detail='active') & ((Q(allow_user_view=True) | Q(allow_anonymous_view=True)) | creator_owner_q)
+                return Q(status=True) & Q(status_detail='active') & ((Q(allow_user_view=True) | Q(allow_anonymous_view=True)) | creator_owner_q)
         else:
             return Q(status=True) & Q(status_detail='active') & Q(allow_anonymous_view=True)
-

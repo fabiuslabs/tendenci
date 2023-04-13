@@ -6,7 +6,6 @@ import time
 from functools import partial
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
-from ast import literal_eval
 
 from django.db import models
 from django.urls import reverse
@@ -638,7 +637,7 @@ class MembershipDefault(TendenciBaseModel):
             value = t % ('inactive','Inactive')
 
         return mark_safe(value)
-    
+
     def delete(self, **kwargs):
         # Make sure profile member number and group are removed before deleting this membership
         self.expire(self.user)
@@ -678,12 +677,12 @@ class MembershipDefault(TendenciBaseModel):
                 if hasattr(demographic, field_name):  # catches broken db relationships
                     data = getattr(demographic, field_name)
                     try:
-                        is_file = literal_eval(data).get('type') == 'file'
+                        is_file = eval(data).get('type') == u'file'
                     except Exception:
                         is_file = False
 
                     if is_file:
-                        field_list.append((field_label, literal_eval(data).get('html')))
+                        field_list.append((field_label, eval(data).get('html')))
                     else:
                         field_list.append((field_label, data))
 
@@ -937,7 +936,7 @@ class MembershipDefault(TendenciBaseModel):
             # no need to check if group.is_member because group.add_user will check it
             if group:
                 group.add_user(self.user)
-                
+
             if get_setting('module',  'memberships', 'adddirectory'):
                 # add a directory entry for this membership
                 self.add_directory()
@@ -2121,7 +2120,7 @@ class MembershipDefault(TendenciBaseModel):
             invoice_link = ''
         return {'membership_link': '%s%s' % (site_url, self.get_absolute_url()),
                   'directory_url': directory_url,
-                  'directory_edit_url': directory_edit_url, 
+                  'directory_edit_url': directory_edit_url,
                   'membership_type': self.membership_type.name,
                   'invoice_link':  invoice_link,}
 
@@ -2621,22 +2620,22 @@ class MembershipApp(TendenciBaseModel):
         params['slug'] = params['slug'][:200]
         params['name'] = params['name'][:155]
         app_cloned = self.__class__.objects.create(**params)
-        
+
         # ud fields - avoid using the same ud fields for cloned app
         all_ud_names = ['ud%d' % (x+1) for x in range(30)]
         used_ud_field_names = [field.field_name for field in MembershipAppField.objects.filter(field_name__in=all_ud_names, display=True)]
         available_ud_field_names = [name for name in all_ud_names if name not in used_ud_field_names]
-        
+
         this_app_ud_names = [field.field_name for field in self.fields.filter(field_name__in=all_ud_names, display=True)]
         ud_replace_with = available_ud_field_names[:len(this_app_ud_names)]
-        
+
         # clone fiellds
         fields = self.fields.all()
         for field in fields:
             if field.field_name in this_app_ud_names:
                 field.display = False
             elif field.field_name in ud_replace_with:
-                field.display = True 
+                field.display = True
             field.clone(app_cloned)
 
         return app_cloned
@@ -2858,3 +2857,42 @@ class MembershipFile(File):
     """
     class Meta:
         app_label = 'memberships'
+
+
+def get_searchable_membershipapp_fields():
+    """
+    Get fields configured to be searchable by other forms,
+    such as ProfileSearchForm & ChapterMemberSearchForm
+    """
+    memberapp_field_names = get_setting('module', 'memberships', 'searchable_app_fields')
+    memberapp_fields = []
+    if memberapp_field_names:
+        memberapp_field_names = [fname.strip(' ') for fname in memberapp_field_names.split(',')]
+        for fname in memberapp_field_names:
+            try:
+                memberapp_field = MembershipAppField.objects.filter(field_name=fname).order_by('pk')[0]
+                memberapp_fields.append(memberapp_field)
+            except Exception as e:
+                pass
+
+    return memberapp_fields
+
+
+def filter_qset_by_searchable_memberapp_fields(queryset, fields):
+    for field_name, criteria in fields.items():
+        mcb_filter = dict()
+        if isinstance(criteria, list):
+            # a multi checkbox,
+            # which means json-like string storage.
+            for crit in criteria:
+                filter_key = '__'.join(['user', 'membershipdefault', field_name, 'contains'])
+                mcb_filter[filter_key] = crit
+                queryset = queryset.filter(**mcb_filter)
+        else:
+            # scalar; simple eq ought to work,
+            # but this isn't a client use-case yet
+            filter_key = '__'.join(['user', 'membershipdefault', field_name])
+            mcb_filter[filter_key] = criteria
+            queryset = queryset.filter(**mcb_filter)
+
+    return queryset

@@ -1,0 +1,60 @@
+{% extends "event_logs/base-wide.html" %}
+{% load reports_tags %}
+{% load humanize %}
+
+{% block extra_head %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'css/reports.css' %}">
+{% endblock %}
+
+{% block content %}
+<h1>{% trans "Tendenci&reg; Event Log Summary Report" %}<br />
+{{ application }}</h1>
+
+
+<nav class="event-log-summary-nav" aria-label="previous and next month navigation">
+  <ul class="list-inline text-center">
+    <li class="pull-left"><h2><a href="./?{% month_url previous %}"><i class="fa fa-angle-left"></i></a></h2></li>
+    <li><h2 class="text-center">{{ date_range.0|date:"M Y" }}</h2></li>
+    <li class="pull-right" ><h2><a href="./?{% month_url next %}"><i class="fa fa-angle-right"></i></a></h2></li>
+  </ul>
+</nav>
+
+<table class="events-summary-chart">
+<tr>
+{% for day, items in chart_data.items %}
+    <td>
+        {% for item in items %}
+            <a href="{% url "event_log.search" %}?application={{ application }}&action={{ item.action }}" title="{{ item.action }} ({{ item.count|intcomma }})">
+                <div style="width: 24px; height: {{ item.height }}px; background-color: #{{ item.color }}"> </div>
+            </a>
+        {% endfor %}
+        {{ day.day }}
+        <div style="font-size: 10px;">{{ day|date:"D" }}</div>
+    </td>
+{% endfor %}
+</tr>
+</table>
+
+<ul class="events-summary">
+{% for item in summary_data %}
+    <li>
+    <span style="background-color: #{{ item.color }};"> &nbsp;  &nbsp; </span>
+    &nbsp;
+    <a href="{% url "event_log.search" %}?application={{ application }}&action={{ item.action }}">{{ item.action }} ({{ item.count|intcomma }})</a>
+    </li>
+{% endfor %}
+</ul>
+
+<div style="clear: both;"></div>
+
+<p><a href="{% url "reports-events-summary" %}?{{ request.META.QUERY_STRING }}">{% trans "Back to main Event Logs report" %}</a></p>
+
+{% comment %}
+<form>{% csrf_token %}
+<table>{{ form }}</table>
+<input type="submit" value="submit">
+</form>
+{% endcomment %}
+
+{% endblock content %}

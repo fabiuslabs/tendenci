@@ -88,7 +88,6 @@ def process_export(
                       'city',
                       'state',
                       'zipcode',
-                      'county',
                       'country',
                       'region',
                       'phone',

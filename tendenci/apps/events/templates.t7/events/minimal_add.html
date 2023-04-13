@@ -1,0 +1,98 @@
+{% extends "events/base.html" %}
+{% load event_tags %}
+{% load perm_tags %}
+{% load styled_forms %}
+
+{% block title %}{{ block.super }}{% trans "Minimal Add" %}{% endblock %}
+
+{% block extra_head %}
+{{ block.super }}
+<link rel="stylesheet" href="//ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/smoothness/jquery-ui.css">
+<link rel="stylesheet" href="{% static 'timepicker/timepicker.css' %}" />
+<link rel="stylesheet" href="{% static 'css/events.css' %}">
+<script type="text/javascript" src="{{ TINYMCE_JS_URL }}"></script>
+{% endblock %}
+
+{% block content %}
+<div class="t">
+    <h1>{% firstof MODULE_EVENTS_LABEL trans 'Event' %} {% trans "Minimal Add" %}</h1>
+    <p>{% trans 'Adding events are subject to the approval of the Administrators.' %}</p>
+
+    <div class="event-wrap">
+        <form class="form-horizontal" action="{% url "event.minimal_add" %}" method="post" enctype="multipart/form-data">{% csrf_token %}
+            {{ form|styled_form }}
+            {{ form_place|styled_form }}
+            <input class="btn btn-primary" type="submit" value="Add {% firstof MODULE_EVENTS_LABEL trans 'Event' %}" />
+        </form>
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block extra_body %}
+    {{ block.super }}
+    <link href="{% static 'tiny_mce/custom.css' %}" type="text/css" media="all" rel="stylesheet">
+    <script type="text/javascript" src="{{ TINYMCE_JS_URL }}"></script>
+    <script type="text/javascript" src="{% url 'tinymce-filebrowser' %}"></script>
+    <script type="text/javascript" src="{% static 'tiny_mce/init_tinymce.js' %}"></script>
+    <script type="text/javascript" src="{% static 'js/global/tinymce.event_handlers.js' %}"></script>
+    <script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+    <script type="text/javascript" src="{% static 'timepicker/timepicker.js' %}"></script>
+    <script type="text/javascript" src="{% static 'js/slug.js' %}"></script>
+    <script type="text/javascript">
+        var slugit = new Slugify({
+            input_element : 'input#id_title',
+            slug_element : 'input#id_slug',
+            submit_element : 'input[type="submit"]',
+            help: false,
+            limit : 150
+        });
+
+        //script for hiding and showing the 'On weekend' field
+        //when nesessary.
+        $(document).ready(function() {
+			// Remove multi-select option from groups
+            $('select#id_groups').prop('multiple', false );
+            $('#id_groups').next('span.help-block').hide();
+        	// Date and time picker for start_dt and end_dt
+            $('#id_start_dt_0').datepicker({ dateFormat: 'yy-mm-dd' });
+            $('#id_start_dt_1').timepicker({'timeFormat': 'h:i A'});
+            $('#id_end_dt_0').datepicker({ dateFormat: 'yy-mm-dd' });
+            $('#id_end_dt_1').timepicker({'timeFormat': 'h:i A'});
+
+            weekend = $('#id_on_weekend').closest('.form-group');
+            start_dt = $('input#id_start_dt_0');
+            start_dt_val = start_dt.val();
+            end_dt =  $('input#id_end_dt_0');
+            end_dt_val = end_dt.val();
+
+            if(start_dt_val != end_dt_val){
+                weekend.show();
+            } else {
+                weekend.hide();
+            }
+
+            start_dt.on("change", function() {
+                val = end_dt.val()
+                if ($(this).val() == val) {
+                    weekend.hide();
+                } else {
+                    weekend.show();
+                }
+            });
+
+            end_dt.on("change", function() {
+                val = start_dt.val()
+                if ($(this).val() == val) {
+                    weekend.hide();
+                } else {
+                    weekend.show();
+                }
+            });
+        });
+    </script>
+    <script type="text/javascript">
+        {% include 'events/include/event_place.js' %}
+    </script>
+{% endblock %}

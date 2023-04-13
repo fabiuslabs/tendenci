@@ -1,0 +1,34 @@
+{% load perm_tags %}
+{% has_perm user profiles.change_profile as has_change_perm %}
+<div class="group">
+  <form method="POST" action="">{% csrf_token %}
+    <table class="table table-tendenci-reports">
+      <tr>
+        <th>{% trans "ID" %}</th>
+        <th>{% trans "Username" %}</th>
+        <th>{% trans "First Name" %}</th>
+        <th>{% trans "Last Name" %}</th>
+        <th>{% trans "Email" %}</th>
+        <th>{% trans "Member ID" %}</th>
+        <th>{% trans "Join Date" %}</th>
+        <th>{% trans "Last Login Date" %}</th>
+      </tr>
+      {% for user in users %}
+      <tr>
+        <td>{{ user.id }}</td>
+        <td><a href="{% if user.username %}{% url 'profile' user.username %}{% else %}{% url "profile.edit" user.id  %}{% endif %}">{{ user.username }}</a></td>
+        <td>{{ user.first_name }}</td>
+        <td>{{ user.last_name }}</td>
+        <td>{{ user.email }}</td>
+        <td>{{ user.profile.member_number }}</td>
+        <td>{{ user.date_joined|date:"SHORT_DATE_FORMAT" }}</td>
+        <td>{{ user.last_login|date:"SHORT_DATE_FORMAT" }}</td>
+      </tr>
+      <input name="id_users" type="hidden" value="{{ user.id }}">
+      {% endfor %}
+    </table>
+    {% if has_change_perm %}
+    <input class="btn btn-success btn-sm" type="submit" value="{% trans 'Merge these users' %}" />
+    {% endif %}
+  </form>
+</div>

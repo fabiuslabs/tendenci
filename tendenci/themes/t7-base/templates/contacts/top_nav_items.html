@@ -39,6 +39,12 @@
                         </span>
                     </li>
 
+                    <li class="content-item">
+                        <span class="app-name">
+                            <a href="{% url 'contact.add_contact' %}">{% trans "Add" %}</a>
+                        </span>
+                    </li>
+
                     {% if user.is_authenticated %}
                         <li class="content-item">
                             <span class="app-name">

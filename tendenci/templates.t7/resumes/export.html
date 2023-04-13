@@ -1,0 +1,65 @@
+{% extends "resumes/base.html" %}
+{% load resume_tags %}
+{% load base_tags %}
+{% load base_filters %}
+{% load perm_tags %}
+
+{% block extra_head %}
+{{ block.super }}
+<link rel="stylesheet" type="text/css" href="//ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/smoothness/jquery-ui.css"/>
+{% endblock %}
+
+{% block content %}
+<div class="t">
+    <div class="resumes-wrap">
+
+        <h1>{% trans "Resumes Export" %}</h1>
+
+        <div class="content">
+            <form action="." method="POST" >{% csrf_token %}
+	        <div class="form-group">
+			    <label for="start_dt" class="col-sm-3 control-label">{{ form.start_dt.label }}</label>
+			    <div class="col-sm-9 date">
+			      {{ form.start_dt }}
+			      {% if form.start_dt.errors %}
+			      {{ form.start_dt.errors}}
+			      {% endif %}
+			    </div>
+		  	</div>  
+		  	
+		  	<div class="form-group">
+			    <label for="end_dt" class="col-sm-3 control-label">{{ form.end_dt.label }}</label>
+			    <div class="col-sm-9 date">
+			      {{ form.end_dt }}
+			      {% if form.end_dt.errors %}
+			      {{ form.end_dt.errors}}
+			      {% endif %}
+			    </div>
+		  	</div>
+		  	
+		  	<div class="form-group">
+			    <div class="col-sm-offset-3 col-sm-9">
+			    <label>
+		          {{ form.include_files }} {{ form.include_files.label }}
+		        </label>
+			    </div>
+		  	</div> 
+            
+            <input class="btn btn-default" type="submit" value="{% trans 'Export' %}" />
+            </form>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_body %}
+    <script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+    <script>
+    $(function() {
+    	$('#id_start_dt').datepicker({ dateFormat: 'yy-mm-dd' });
+        $('#id_end_dt').datepicker({ dateFormat: 'yy-mm-dd' });
+
+    }); 
+    </script>
+{% endblock %}

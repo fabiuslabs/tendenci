@@ -11,6 +11,6 @@
 <ul class="nav navbar-nav t-main-navbar-nav" id="t-main-navbar-nav-{{ nav.id }}">
 {% endif %}
     {% for item in items %}
-        {% nav_item item is_site_map=is_site_map %}
+        {% nav_item item is_site_map=is_site_map logged_in=logged_in %}
     {% endfor %}
 </ul>

@@ -112,6 +112,13 @@ class Command(BaseCommand):
                 ))
                 new_setting.save()
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--json',
+            action='store',
+            help='Specify a settings file other than ./add_settings.json [optional]',
+        )
+
     def handle(self, *args, **options):
         json_file = os.path.abspath(os.path.join(
             os.path.dirname(__file__),

@@ -1,14 +1,17 @@
 from functools import reduce
 import operator
 import simplejson
-from datetime import date
+from datetime import date, timedelta, datetime
 import time as ttime
 import math
 import subprocess
-from dateutil.parser import parse as dparse, ParserError 
+
+from dateutil import rrule
+from dateutil.parser import parse as dparse, ParserError
 import os
 import mimetypes
 
+from dateutil.relativedelta import relativedelta
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponseRedirect, StreamingHttpResponse
@@ -16,7 +19,7 @@ from django.urls import reverse
 from django.forms.models import inlineformset_factory
 from django.contrib import messages
 from django.contrib.contenttypes.models import ContentType
-from django.db.models import Q
+from django.db.models import Q, Min
 from django.contrib.admin.views.decorators import staff_member_required
 from django.views.decorators.csrf import csrf_exempt
 from django.template.loader import render_to_string
@@ -26,7 +29,10 @@ from django.db.models.fields import AutoField
 from django.utils.translation import gettext_lazy as _
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
+from django.contrib.auth.decorators import user_passes_test
 
+from tendenci.apps.memberships.models import MembershipAppField, get_searchable_membershipapp_fields, \
+    filter_qset_by_searchable_memberapp_fields
 from tendenci.apps.theme.shortcuts import themed_response as render_to_resp
 from tendenci.apps.base.http import Http403
 from tendenci.apps.event_logs.models import EventLog
@@ -44,7 +50,8 @@ from tendenci.apps.chapters.models import (Chapter, Officer,
                                            ChapterMembershipImport,
                                            ChapterMembershipImportData,
                                            Notice,
-                                           ChapterMembershipFile)
+                                           ChapterMembershipFile,
+                                           ChapterMembershipChapterAppField)
 from tendenci.apps.chapters.forms import (ChapterForm, OfficerForm,
                                           OfficerBaseFormSet,
                                           ChapterSearchForm,
@@ -56,7 +63,10 @@ from tendenci.apps.chapters.forms import (ChapterForm, OfficerForm,
                                           ChapterMembershipAppPreForm,
                                           CustomMembershipTypeForm,
                                           MembershipTypeBaseFormSet,
-                                          EmailChapterMemberForm)
+                                          EmailChapterMemberForm,
+                                          ChapterFieldForm,
+                                          ChapterFieldBaseFormSet,
+                                          ChapterAppFieldForm)
 from tendenci.apps.perms.utils import update_perms_and_save, get_notice_recipients, has_perm, get_query_filters
 from tendenci.apps.perms.fields import has_groups_perms
 from tendenci.apps.site_settings.utils import get_setting
@@ -106,7 +116,8 @@ def detail(request, slug, template_name="chapters/detail.html"):
                 'has_group_view_permission': has_group_view_permission,
                 'show_officers_phone': show_officers_phone,
                 'show_officers_email': show_officers_email,
-                'is_chapter_member': chapter.is_chapter_member(request.user)
+                'is_chapter_member': chapter.is_chapter_member(request.user),
+                'is_in_chapter': chapter.is_in_chapter(request.user)
             })
     else:
         if chapter.status_detail.lower() == 'pending':
@@ -124,7 +135,7 @@ def search(request, template_name="chapters/search.html"):
         region = form.cleaned_data.get('region')
         state = form.cleaned_data.get('state')
         county = form.cleaned_data.get('county')
-        
+
         if query:
             chapters = Chapter.objects.search(query, user=request.user)
         else:
@@ -278,15 +289,21 @@ def edit(request, id, form_class=ChapterForm, meta_form_class=MetaForm, category
     OfficerFormSet = inlineformset_factory(Chapter, Officer, form=OfficerForm,
                                            formset=OfficerBaseFormSet, extra=1,)
 
-    formset = OfficerFormSet(request.POST or None, instance=chapter,
+    officer_formset = OfficerFormSet(request.POST or None, instance=chapter,
                              chapter=chapter, prefix="officers")
+
+    ChapterFieldFormSet = inlineformset_factory(Chapter, ChapterMembershipChapterAppField, form=ChapterFieldForm,
+                                           formset=ChapterFieldBaseFormSet, extra=0, can_delete=False)
+
+    field_formset = ChapterFieldFormSet(request.POST or None, instance=chapter,
+                             chapter=chapter, prefix="chapter_fields")
 
     if request.method == "POST":
         form = form_class(request.POST, request.FILES, instance=chapter, user=request.user)
         metaform = meta_form_class(request.POST, instance=chapter.meta, prefix='meta')
-        categoryform = category_form_class(content_type, request.POST, initial= initial_category_form_data, prefix='category') 
+        categoryform = category_form_class(content_type, request.POST, initial= initial_category_form_data, prefix='category')
 
-        if form.is_valid() and metaform.is_valid() and categoryform.is_valid() and formset.is_valid():
+        if form.is_valid() and metaform.is_valid() and categoryform.is_valid() and officer_formset.is_valid() and field_formset.is_valid():
             chapter = form.save()
 
             # update all permissions and save the model
@@ -294,7 +311,7 @@ def edit(request, id, form_class=ChapterForm, meta_form_class=MetaForm, category
 
             #save meta
             meta = metaform.save()
-            chapter.meta = meta         
+            chapter.meta = meta
 
             ## update the category of the chapter
             category_removed = False
@@ -316,7 +333,8 @@ def edit(request, id, form_class=ChapterForm, meta_form_class=MetaForm, category
 
             #save relationships
             chapter.save()
-            formset.save()
+            officer_formset.save()
+            field_formset.save()
 
             # update group perms to officers
             chapter.update_group_perms()
@@ -338,6 +356,27 @@ def edit(request, id, form_class=ChapterForm, meta_form_class=MetaForm, category
 
             return HttpResponseRedirect(reverse('chapters.detail', args=[chapter.slug]))
     else:
+        # populate chapter specific chapter membership app fields from default global app fields if not already exist
+        if ChapterMembershipChapterAppField.objects.filter(chapter=chapter).count() == 0:
+            for field in ChapterMembershipAppField.objects.all():
+                ChapterMembershipChapterAppField.objects.create(
+                    chapter=chapter,
+                    position=field.position,
+                    label=field.label,
+                    field_name=field.field_name,
+                    required=field.required,
+                    display=field.display,
+                    customizable=field.customizable,
+                    admin_only=field.admin_only,
+                    field_type=field.field_type,
+                    description=field.description,
+                    help_text=field.help_text,
+                    choices=field.choices,
+                    default_value=field.default_value,
+                    css_class=field.css_class,
+                    content_type=field.content_type,
+                )
+
         form = form_class(instance=chapter, user=request.user)
         metaform = meta_form_class(instance=chapter.meta, prefix='meta')
         categoryform = category_form_class(content_type, initial=initial_category_form_data, prefix='category')
@@ -349,7 +388,8 @@ def edit(request, id, form_class=ChapterForm, meta_form_class=MetaForm, category
             'form': form,
             'metaform': metaform,
             'categoryform': categoryform,
-            'formset': formset,
+            'officer_formset': officer_formset,
+            'field_formset': field_formset
         })
 
 
@@ -426,13 +466,14 @@ def delete(request, id, template_name="chapters/delete.html"):
 def coordinating_group_list(request, template_name="chapters/coordinating_group_list.html"):
     coordinating_agencies = request.user.chapter_coordinators.all()
     if not coordinating_agencies:
-        raise Http404 
+        raise Http404
     if coordinating_agencies.count() == 1:
         return HttpResponseRedirect(reverse('group.detail', args=[coordinating_agencies[0].group.slug]))
-    
+
     return render_to_resp(request=request,
                           template_name=template_name,
         context={'coordinating_agencies': coordinating_agencies})
+
 
 @is_enabled('chapters')
 @login_required
@@ -485,12 +526,18 @@ def chapter_memberships_search(request, chapter_id=0,
     else:
         app_fields = app.fields.filter(display=True).exclude(
                 field_name__in=field_names_to_exclude)
+
+    data = request.GET
     if 'email_members' in request.POST or 'email_members_selected' in request.POST:
-        form = ChapterMemberSearchForm(request.POST, app_fields=app_fields,
-                                   user=request.user, chapters=chapters)
-    else:
-        form = ChapterMemberSearchForm(request.GET, app_fields=app_fields,
-                                       user=request.user, chapters=chapters)
+        data = request.POST
+
+    form = ChapterMemberSearchForm(
+        data,
+        app_fields=app_fields,
+        user=request.user,
+        chapters=chapters,
+        memberapp_fields=get_searchable_membershipapp_fields()
+    )
 
     if form.is_valid():
         membership_fieldnames = [field.name for field in ChapterMembership._meta.fields if \
@@ -499,6 +546,10 @@ def chapter_memberships_search(request, chapter_id=0,
         membership_type = form.cleaned_data.get('membership_type')
         payment_status = form.cleaned_data.get('payment_status')
         status_detail = form.cleaned_data.get('status_detail')
+        joined_start = form.cleaned_data.get('joined_start')
+        joined_end = form.cleaned_data.get('joined_end')
+        memberapp_fields = {f.name: form.cleaned_data.get(f.name) for f in form.memberapp_fields}
+
         if chapter_selected:
             chapter_memberships = chapter_memberships.filter(chapter__id=chapter_selected)
         if membership_type:
@@ -509,19 +560,24 @@ def chapter_memberships_search(request, chapter_id=0,
             chapter_memberships = chapter_memberships.filter(invoice__balance__gt=0)
         if status_detail:
             chapter_memberships = chapter_memberships.filter(status_detail__iexact=status_detail)
+        if joined_start:
+            chapter_memberships = chapter_memberships.filter(create_dt__gte=joined_start)
+        if joined_end:
+            chapter_memberships = chapter_memberships.filter(create_dt__lte=joined_end)
         for field_name, field_value in form.cleaned_data.items():
             if field_value and field_name in membership_fieldnames:
                 if isinstance(field_value, list):
-                    chapter_memberships = chapter_memberships.filter(reduce(operator.or_, 
+                    chapter_memberships = chapter_memberships.filter(reduce(operator.or_,
                         [Q(**{f'{field_name}__icontains': value}) for value in field_value]))
                 elif isinstance(field_value, str):
                     chapter_memberships = chapter_memberships.filter(Q(**{f'{field_name}__icontains': field_value}))
                 elif isinstance(field_value, bool):
                     chapter_memberships = chapter_memberships.filter(Q(**{f'{field_name}': field_value}))
-                    
-                    
+
+        chapter_memberships = filter_qset_by_searchable_memberapp_fields(chapter_memberships, memberapp_fields)
+
         chapter_memberships = chapter_memberships.order_by('user__last_name', 'user__first_name')
-    
+
         if 'export' in request.GET:
             EventLog.objects.log(description="chapter memberships export")
             import csv
@@ -529,15 +585,14 @@ def chapter_memberships_search(request, chapter_id=0,
                 field_labels = [_('First Name'), _('Last Name'), _('Email'), _('Username')]
                 field_labels += [_('Phone'), _('Address'), _('County'), _('State'), _('Zip Code'),]
                 field_labels += [field.label for field in app_fields]
-                field_labels += [_('Membership Type')]
                 field_labels += [_('Create Date'), _('Join Date'), _('Renew Date'),
                                 _('Expire Date'), _('Status Detail')]
                 field_labels.insert(0, _('Chapter'))
-                
+
                 writer = csv.DictWriter(Echo(), fieldnames=field_labels)
                 # write headers - labels
                 yield writer.writerow(dict(zip(field_labels, field_labels)))
-            
+
                 for chapter_membership in chapter_memberships:
                     values_list = [chapter_membership.user.first_name,
                                    chapter_membership.user.last_name,
@@ -549,7 +604,6 @@ def chapter_memberships_search(request, chapter_id=0,
                     else:
                         values_list += ['', '', '', '', '']
                     values_list += get_chapter_membership_field_values(chapter_membership, app_fields)
-                    values_list.append(chapter_membership.membership_type.name)
                     if chapter_membership.create_dt:
                         values_list.append(chapter_membership.create_dt.strftime('%Y-%m-%d %H:%M:%S'))
                     else:
@@ -567,11 +621,11 @@ def chapter_memberships_search(request, chapter_id=0,
                     else:
                         values_list.append('')
                     values_list.append(chapter_membership.status_detail)
-                    
+
                     values_list.insert(0, chapter_membership.chapter.title)
-            
+
                     yield writer.writerow(dict(zip(field_labels, values_list)))
-    
+
             response = StreamingHttpResponse(
             streaming_content=(iter_chapter_memberships(chapter_memberships, app_fields)),
             content_type='text/csv',)
@@ -614,13 +668,30 @@ def chapter_memberships_search(request, chapter_id=0,
             retn_content = email_chapter_members(email,
                                                  chapter_memberships,
                                                  request=request)
-    
+
             EventLog.objects.log(instance=email)
             return StreamingHttpResponse(streaming_content=retn_content)
     else:
         # search_form is invalid
         chapter_memberships = chapter_memberships.none()
         email_form = None
+
+    weeks = []
+
+    now = datetime.now()
+    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    chart_start = joined_start if joined_start else chapter_memberships.aggregate(Min('create_dt'))['create_dt__min']
+    chart_end = joined_end if joined_end else today
+
+    for start_dt in rrule.rrule(rrule.WEEKLY, dtstart=chart_start, until=chart_end):
+        end_dt = start_dt + relativedelta(weeks=1)
+        members = chapter_memberships.filter(create_dt__gte=start_dt, create_dt__lt=end_dt)
+        new_mems = members.filter(renewal=False).order_by().count()
+        week_dict = {
+            'name': '{} - {}'.format(start_dt.strftime("%b. %-d, %Y"), end_dt.strftime("%b. %-d, %Y")),
+            'new_mems': new_mems,
+        }
+        weeks.append(week_dict)
 
     EventLog.objects.log()
 
@@ -633,7 +704,9 @@ def chapter_memberships_search(request, chapter_id=0,
             'app': app,
             'chapter': chapter,
             'coordinator_states': coordinator_states,
-            'app_fields': app_fields})
+            'app_fields': app_fields,
+            'weeks': weeks,
+        })
 
 
 @csrf_exempt
@@ -645,6 +718,27 @@ def get_app_fields_json(request):
     complete_list = simplejson.loads(
         render_to_string(template_name='chapters/app_fields.json'))
     return HttpResponse(simplejson.dumps(complete_list), content_type="application/json")
+
+
+@csrf_exempt
+def get_chapter_app_fields_json(request, chapter_id):
+   """
+   Get the app fields for a specific chapter and return as json
+   """
+   app = ChapterMembershipApp.objects.current_app()
+   chapter = get_object_or_404(Chapter, id=chapter_id)
+   app_fields = app.get_app_fields(chapter, request.user)
+   data = [{'field_name': field.field_name,
+            'default_value': field.default_value,
+            'required': field.required,
+            'display': field.display,
+            'field_type': field.field_type,
+            'description': field.description,
+            'css_class': field.css_class,
+            'label': field.label,
+            'help_text': field.help_text,
+            'choices': field.choices} for field in app_fields]
+   return HttpResponse(simplejson.dumps(data), content_type="application/json")
 
 
 @is_enabled('chapters')
@@ -677,7 +771,7 @@ def edit_app_fields(request, id, form_class=AppFieldCustomForm, template_name="c
     if request.method == "POST":
         if formset_app_fields.is_valid():
             cfields = formset_app_fields.save()
-            
+
             msg_string = _('Successfully saved fields: ') + \
                 ', '.join([cfield.app_field.label for cfield in cfields])
             messages.add_message(request, messages.SUCCESS, _(msg_string))
@@ -689,6 +783,37 @@ def edit_app_fields(request, id, form_class=AppFieldCustomForm, template_name="c
         context={'chapter': chapter,
                  'app_fields_exists': app_fields_qs.exists(),
                  'formset_app_fields': formset_app_fields,})
+
+
+@is_enabled('chapters')
+@login_required
+def edit_app_field(request, id, form_class=ChapterAppFieldForm, template_name="chapters/edit_app_field.html"):
+    """
+    Custom app fields for a chapter.
+    """
+    app_field = get_object_or_404(ChapterMembershipChapterAppField, pk=id)
+
+    if not has_perm(request.user, 'chapters.change_chaptermembershipappfield') \
+            and not app_field.chapter.is_chapter_leader(request.user):
+        raise Http403
+
+    app_fields_qs = ChapterMembershipChapterAppField.objects.exclude(field_name__in=['membership_type', 'payment_method'])
+    form = form_class(request.POST or None, instance=app_field)
+    if request.method == "POST":
+        if form.is_valid():
+            field = form.save()
+
+            msg_string = 'Successfully updated question %s' % str(field)
+            messages.add_message(request, messages.SUCCESS, _(msg_string))
+
+            return HttpResponseRedirect(reverse('chapters.edit', args=[field.chapter.id]))
+
+    # response
+    return render_to_resp(request=request, template_name=template_name, context={
+        'app_field': app_field,
+        'app_fields_exists': app_fields_qs.exists(),
+        'form': form,
+    })
 
 
 @is_enabled('chapters')
@@ -727,7 +852,7 @@ def edit_membership_types(request, id, form_class=CustomMembershipTypeForm,
     if request.method == "POST":
         if formset_membership_types.is_valid():
             c_membership_types = formset_membership_types.save()
-            
+
             msg_string = _('Successfully saved membership types: ') + \
                 ', '.join([c_membership_type.membership_type.name for c_membership_type in c_membership_types])
             messages.add_message(request, messages.SUCCESS, _(msg_string))
@@ -829,7 +954,7 @@ def chapter_membership_add_pre(request,
 
 
 @is_enabled('chapters')
-@login_required
+# @login_required
 def chapter_membership_add(request, chapter_id=0,
                            template='chapters/applications/add.html', **kwargs):
     """
@@ -847,7 +972,7 @@ def chapter_membership_add(request, chapter_id=0,
 
     # app fields
     app_fields = app.get_app_fields(chapter, request.user)
-    
+
     params = {
         'request_user': request.user,
         'is_renewal': False,
@@ -856,7 +981,7 @@ def chapter_membership_add(request, chapter_id=0,
     }
     chapter_membership_form = ChapterMembershipForm(app_fields, chapter,
                             request.POST or None, request.FILES or None,
-                            instance=chapter_membership, **params)
+                            instance=chapter_membership, prefix='chapter', **params)
 
     if request.method == 'POST':
         if chapter_membership_form.is_valid():
@@ -883,7 +1008,7 @@ def chapter_membership_add(request, chapter_id=0,
 
             # log an event
             EventLog.objects.log(instance=chapter_membership)
-            
+
             # TODO: email notification to admin
             # Who should be notified? site admin or chapter leaders?
             if chapter.contact_email:
@@ -936,6 +1061,8 @@ def chapter_membership_add(request, chapter_id=0,
         'is_edit': False,
         'is_renewal': False,
     }
+    if request.is_ajax():
+        template = 'chapters/applications/ajax_add.html'
     return render_to_resp(request=request, template_name=template, context=context)
 
 
@@ -946,7 +1073,7 @@ def chapter_membership_edit(request, chapter_membership_id=0,
     """
     Chapter membership edit.
     """
-    
+
     chapter_membership = get_object_or_404(ChapterMembership, id=chapter_membership_id)
     if not chapter_membership.allow_edit_by(request.user):
         raise Http403
@@ -956,7 +1083,7 @@ def chapter_membership_edit(request, chapter_membership_id=0,
 
     # app fields
     app_fields = app.get_app_fields(chapter, request.user)
-    
+
     params = {
         'request_user': request.user,
         'is_renewal': False,
@@ -1005,14 +1132,14 @@ def chapter_membership_renew(request, chapter_membership_id=0,
         raise Http403
 
     if not chapter_membership.can_renew():
-        if not request.user.is_superuser:
+        if not (chapter_membership.chapter.is_chapter_leader(request.user) or request.user.is_superuser):
             return HttpResponseRedirect(reverse('chapters.membership_details',
                         args=[chapter_membership.id]))
 
     app = chapter_membership.app
     chapter = chapter_membership.chapter
     renew_from_id = chapter_membership.id
-    
+
     # app fields
     app_fields = app.get_app_fields(chapter, request.user)
     membership_initial = {}
@@ -1020,8 +1147,8 @@ def chapter_membership_renew(request, chapter_membership_id=0,
         field_name = app_field.field_name
         if field_name and hasattr(chapter_membership, field_name):
             membership_initial[field_name] = getattr(chapter_membership, field_name)
-        
-    
+
+
     params = {
         'request_user': request.user,
         'renew_from_id': renew_from_id,
@@ -1306,22 +1433,22 @@ def chapter_memberships_import_preview(request, mimport_id,
             for f in ['join_dt', 'expire_dt', 'membership_type']:
                 if f in idata.row_data:
                     user_display[f] = idata.row_data[f]
-            
+
             users_list.append(user_display)
             if not fieldnames:
                 fieldnames = list(idata.row_data.keys())
-                
+
         # DateTime fields are sensitive to parse failures
-        # They are not parsed in the preview yet, in fact all 
-        # data travens as strings to be cleaned and parsd just 
-        # before being saved to the respecive models. Datetimes 
+        # They are not parsed in the preview yet, in fact all
+        # data travens as strings to be cleaned and parsd just
+        # before being saved to the respecive models. Datetimes
         # and dates are parsed with dateutil.parser, so we do
         # that here specifically so that someone importing dates
-        # sees a preview of the parse success/failure before 
+        # sees a preview of the parse success/failure before
         # committing.
         #
-        # We elect join_dt and expire_dt as the two most likely 
-        # dates of interest to someone importing members en 
+        # We elect join_dt and expire_dt as the two most likely
+        # dates of interest to someone importing members en
         # masse.
         for dt in ['join_dt', 'expire_dt']:
             if dt in fieldnames:
@@ -1334,8 +1461,8 @@ def chapter_memberships_import_preview(request, mimport_id,
                     else:
                         u[dt] = "None"
 
-        # Similarly membership_type if imported must be 
-        # imported as the id of a membership_type and it's 
+        # Similarly membership_type if imported must be
+        # imported as the id of a membership_type and it's
         # useful to get feedback on integrity at the preview
         # before committing the import.
         # TODO: This could generalize to all ID type imports supported
@@ -1347,7 +1474,7 @@ def chapter_memberships_import_preview(request, mimport_id,
                     mt = int(str(u['membership_type_id']))
                 except ValueError:
                     mt = 'Value Error'
-                    
+
                 u['membership_type_id'] = mts.get(mt, 'None')
         if not mimport.chapter:
             if 'chapter_id' in fieldnames:

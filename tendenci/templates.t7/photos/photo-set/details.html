@@ -1,0 +1,92 @@
+{% extends "photos/base-wide.html" %}
+
+{% load humanize %}
+{% load bootstrap_pagination_tags %}
+{% load tagging_tags %}
+{% load photo_tags %}
+{% load base_tags %}
+
+{% block title %}{{ block.super }}{{ photo_set.name }}{% endblock %}
+
+{% block extra_head %}
+{{ block.super }}
+<link rel="stylesheet" type="text/css" href="{% static 'css/photos.css' %}">
+<link rel="stylesheet" type="text/css" href="{% static 'css/photos-photo-set.css' %}">
+
+<meta property="og:title" content="{{ photo_set.name }}" />
+<meta property="og:type" content="image/jpeg" />
+<meta property="og:image" content="{{ photo_set.get_cover_photo.get_small_url }}" />
+
+{% if photo_set.description %}
+<meta property="og:description" content="{{ photo_set.description|striptags }}" />
+{% endif %}
+
+{% endblock %}
+
+{% block content %}
+
+<div class="col-md-12">
+  
+  <nav>  
+    <ul class="pager">
+      <li class="previous"><a href="{% url "photoset_latest" %}"><span aria-hidden="true">&larr;</span> {% trans "Back to Albums" %}</a></li>
+    </ul>
+  </nav>  
+
+  <div class="page-header">
+    <h1 class="set-name">{{ photo_set.name }} {{ photo_set.obj_lock }}</h1>
+	
+	<div class="set-description">
+        {{ photo_set.description|safe|urlize|linebreaks }}
+    </div>
+  </div>
+        
+    <div id="photos-wrap">
+      {% if photos %}
+      {% autopaginate photos 48 %}
+      <div class="thumb-row clearfix">
+          <div class="grid">
+            
+            {% for photo in photos %}
+            <div class="grid-item col-md-4 col-sm-4 col-xs-4">
+              <div class="thumbnail">
+                <a href="{% url "photo" photo.pk photo_set.pk %}">
+                  <img class="img-responsive" src="{% url "photo_original" photo.pk %}" alt="{{ photo.title|truncatechars:123 }}" title="{{ photo.title|truncatechars:123 }}"/>
+                </a>
+              </div>
+            </div>
+            
+            {% endfor %}
+          </div>
+        
+      </div>
+      <div style="clear:both; height:10px;"></div>
+      {% paginate %}
+      {% else %}
+      <p>{% trans "No photos were found." %}</p>
+      {% endif %}
+    </div>
+
+</div>
+
+<!-- delete form -->
+<form name="delete-photo-set" method="POST" action="{% url "photoset_delete" photo_set.pk %}">{% csrf_token %}
+  <input type="hidden" name="action" value="delete">
+</form>
+
+{% endblock %}
+
+{% block extra_body %}
+{{ block.super }}
+<script type="text/javascript">
+  $(document).ready(function(){
+  
+  // delete confirmation
+  $('.delete-set').on("click", function(){
+  var delete_item = confirm('{% trans "Permenantly delete photo set?" %}');    // confirm
+  if(delete_item) $('form[name="delete-photo-set"]').submit() // delete: if OK
+  return false;    // cancel
+  });
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,181 @@
+{% extends "payments/base.html" %}
+{% load payments_tags %}
+{% load base_filters %}
+
+{% block title %}{% trans 'View a Payment' %}{% endblock %}
+
+{% block extra_head %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'css/payments.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="t payment-view">
+<h1>{% trans "View a Payment" %}</h1>
+
+<p class="payment-view-intro">
+{% trans "Payments are created with " %}
+<a href="{% url "invoice.search" %}">{% trans "invoices" %}</a>.
+{% blocktrans %}
+There can be, theoretically, multiple payments for one invoice.
+Only a TENDERED invoice can have a payment created for it, but if the payment
+were to not be approved then it is possible for the user to initiate payment
+again resulting in more than one payment per invoice. The real trail is on the accounting side - note the yellow &quot;accounting&quot; link below for more information. <br><br>***Reversing a payment does *NOT* issue a credit or refund.  It will simply reverse
+the payment entries in the general ledger for accounting purposes.
+{% endblocktrans %}<p>
+
+<div class="payment-view-block">
+<h2>{% trans "Admin / Owner Block" %}</h2>
+<table class="table">
+<tr>
+<td colspan="2">{% trans "Payment ID:" %} {{ payment.id }}</td>
+<td colspan="2">{% trans "Status Detail:" %} {{ payment.status_detail }}</td>
+</tr>
+
+<tr>
+<td colspan="2">{% trans "Invoice ID:" %}
+<a href="{% url "invoice.view" payment.invoice.id %}">{{ payment.invoice.id }}</a>
+<span class="body-copy-yellow"><a href="{% url "invoice.detail" payment.invoice.id %}">{% trans "accounting" %}</a></span>
+</td>
+<td colspan="2">{% trans "Payment Status:" %}
+{% if payment.status%}1{% else %}0{% endif %}</td>
+</tr>
+
+<tr>
+<td colspan="4">{% trans "Payment GUID:" %} {{ payment.guid }}</td>
+</tr>
+
+<tr>
+<td colspan="4"><strong>{% trans "Created:" %} {{ payment.create_dt|date:'long' }}</strong></td>
+</tr>
+
+
+<tr>
+<td colspan="2">{% trans "Creator:" %}
+{% if payment.creator%}<a href="{% url "profile" payment.creator.username %}">{{ payment.creator.username }}</a>{%endif%}</td>
+<td colspan="2">{% trans "Owner:" %}
+{% if payment.owner%}<a href="{% url "profile" payment.owner.username %}">{{ payment.owner.username }}</a>{%endif%}</td>
+</tr>
+</table>
+</div>
+
+<div class="payment-view-block">
+<h2>{% trans "Transaction Details" %}</h2>
+<table class="table">
+<tr>
+<td>{% trans "Response Code:" %} {{ payment.response_code }}</td>
+<td>{% trans "Response Subcode:" %} {{ payment.response_subcode }}</td>
+</tr>
+
+<tr>
+<td colspan="2">{% trans "Response Reason Code:" %} {{ payment.response_reason_code }}</td>
+</tr>
+
+<tr>
+<td colspan="2">{% trans "Response Reason Text:" %} {{ payment.response_reason_text }}</td>
+</tr>
+
+<tr>
+<td colspan="2">{% trans "Response Page:" %}
+{{ payment.response_page }}</td>
+</tr>
+
+<tr>
+<td colspan="2">{% trans "Trans ID:" %} {{ payment.trans_id }}</td>
+</tr>
+
+<tr>
+<td>{% trans "PO Number:" %} {{ payment.po_num}}</td>
+<td>{% trans "Authorization Code:" %} {{ payment.auth_code }}</td>
+</tr>
+
+<tr>
+<td><strong>{% trans "Amount:" %} {{ payment.amount|format_currency }}</strong></td>
+<td><strong>{% trans "Method:" %} {{ payment.method }}</strong></td>
+</tr>
+
+{% if payment.check_number %}
+<td>&nbsp;</td>
+<td>{% trans "Check Number:" %} {{ payment.check_number}}</td>
+{% endif %}
+
+<tr>
+<td>{% trans "Invoice Number:" %} {{ payment.invoice_num_}}</td>
+<td>{% trans "AVS Result Code:" %} {{ payment.avs_code }}</td>
+</tr>
+
+<tr>
+<td><strong>{% trans "Description:" %} {{ payment.description }}</strong></td>
+<td colspan="3">&nbsp;</td>
+</tr>
+
+</table>
+</div>
+
+<div class="payment-view-block">
+<h2>{% trans "Customer Name and Billing Address" %}</h2>
+<table class="table">
+<tr>
+<td colspan="2">{% trans "Cardholder Name:" %} {% if payment.first_name %}{{ payment.first_name }}{% endif %} {% if payment.last_name %}{{ payment.last_name }}{% endif %}</td>
+</tr>
+
+<tr>
+<td colspan="2">{% trans "Company:" %} {% if payment.companye %}{{ payment.company }}{% endif %}</td>
+</tr>
+
+<tr>
+<td colspan="2">{% trans "Billing Address:" %} {% if payment.address %}{{ payment.address}}{% endif %}</td>
+</tr>
+
+<tr>
+<td>{% trans "City:" %} {% if payment.city %}{{ payment.city}}{% endif %}</td>
+<td>State: {% if payment.state_name %}{{ payment.state }}{% endif %}</td>
+</tr>
+
+<tr>
+<td>{% trans "Zip:" %} {% if payment.zip %}{{ payment.zip}}{% endif %}</td>
+<td>Country: {% if payment.country %}{{ payment.country }}{% endif %}</td>
+</tr>
+
+<tr>
+<td>{% trans "Phone:" %} {% if payment.phone %}{{ payment.phone}}{% endif %}</td>
+<td>Fax: {% if payment.fax %}{{ payment.fax }}{% endif %}</td>
+</tr>
+
+<tr>
+<td>{% trans "Email:" %} {% if payment.email %}{{ payment.email|obfuscate_email }}{% endif %}</td>
+<td>&nbsp;</td>
+</tr>
+
+</table>
+</div>
+
+
+<div class="payment-view-block">
+<h2>{% trans "Customer Shipping Address" %}</h2>
+<table class="table">
+<tr>
+<td>{% trans "Ship to First Name:" %} {{ payment.ship_to_first_name }}</td>
+<td>{% trans "Ship to Last Name:" %} {{ payment.ship_to_last_name }}</td>
+</tr>
+
+<tr>
+<td>{% trans "Ship to Company:" %} {{ payment.ship_to_company }}</td>
+<td>{% trans "Ship to Address:" %} {{ payment.ship_to_address}}</td>
+</tr>
+
+<tr>
+<td>{% trans "Ship to City:" %} {{ payment.ship_to_city}}</td>
+<td>{% trans "Ship to State:" %} {{ payment.ship_to_state }}</td>
+</tr>
+
+<tr>
+<td>{% trans "Ship to Zip:" %} {{ payment.ship_to_zip}}</td>
+<td>{% trans "Ship to Country:" %} {{ payment.ship_to_country }}</td>
+</tr>
+
+</table>
+</div>
+
+</div>
+{% endblock %}

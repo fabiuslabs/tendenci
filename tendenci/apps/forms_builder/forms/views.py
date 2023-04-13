@@ -85,6 +85,9 @@ def edit(request, id, form_class=FormForm, template_name="forms/edit.html"):
     if not has_perm(request.user,'forms.change_form',form_instance):
         raise Http403
 
+    if not (form_instance.creator == request.user and form_instance.owner == request.user):
+        raise Http403
+
     PricingFormSet = inlineformset_factory(Form, Pricing, form=PricingForm, extra=2)
 #     RecurringPaymentFormSet = inlineformset_factory(Form, RecurringPayment, form=RecurringPaymentForm, extra=2)
     formset = PricingFormSet(request.POST or None, instance=form_instance)
@@ -120,6 +123,9 @@ def update_fields(request, id, template_name="forms/update_fields.html"):
     if not has_perm(request.user,'forms.add_form',form_instance):
         raise Http403
 
+    if not (form_instance.creator == request.user and form_instance.owner == request.user):
+        raise Http403
+
     form_class=inlineformset_factory(Form, Field, form=FormForField, formset=BaseFieldFormSet, extra=3)
     form_class._orderings = 'position'
 
@@ -144,6 +150,9 @@ def delete(request, id, template_name="forms/delete.html"):
 
     # check permission
     if not has_perm(request.user,'forms.delete_form',form_instance):
+        raise Http403
+
+    if not (form_instance.creator == request.user and form_instance.owner == request.user):
         raise Http403
 
     if request.method == "POST":
@@ -289,6 +298,9 @@ def entry_delete(request, id, template_name="forms/entry_delete.html"):
     if not has_perm(request.user,'forms.delete_formentry',entry):
         raise Http403
 
+    if not (entry.form.creator == request.user and entry.form.owner == request.user):
+        raise Http403
+
     if request.method == "POST":
         messages.add_message(request, messages.SUCCESS, _('Successfully deleted entry %(e)s' % { 'e': entry}))
         # hold the form here as the value of entry will be None after entry is deleted
@@ -424,9 +436,8 @@ def form_detail(request, slug=None, id=None, template="forms/form_detail.html"):
     if edit_mode:
         if not has_perm(request.user,'forms.change_formentry',entry):
             raise Http403
-    else:
-        # form submission needs to check permission as well
-        if not has_view_perm(request.user,'forms.view_form',form):
+
+        if not (entry.form.creator == request.user and entry.form.owner == request.user):
             raise Http403
 
     # If form has a recurring payment, make sure the user is logged in

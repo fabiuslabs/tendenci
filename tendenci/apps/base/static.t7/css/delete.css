@@ -1,1 +1,4 @@
-../../../../themes/t7-base/static/css/delete.css
+.delete-prompt {font-size: 14px; color: red; margin-bottom: 6px;}
+.delete-form {margin-bottom: 10px;}
+.back-item,
+.back-search {margin-bottom: 4px;}

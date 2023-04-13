@@ -1,0 +1,7 @@
+
+<div class="t-iconrow">
+    {% if volunteer.user %}
+    <a class="option-link print" href="{% url 'profile' volunteer.user.username %}">{% trans "View Profile" %}</a>
+    {% endif %}
+
+</div>

@@ -152,6 +152,7 @@ def assign_files_perms(instance, **kwargs):
 
             file.save()
 
+
 def has_perm(user, perm, obj=None):
     """
         A simple wrapper around the user.has_perm
@@ -159,7 +160,34 @@ def has_perm(user, perm, obj=None):
     """
     if user.profile.is_superuser:
         return True
-    return user.has_perm(perm, obj)
+    allowed = user.has_perm(perm, obj)
+    trace_perm(user, perm, obj, allowed)
+
+    return allowed
+
+
+def trace_perm(user, perm, obj, allowed):
+    if not hasattr(user, '_perm_trace'):
+        return
+
+    if not hasattr(user, '_group_perm_origin'):
+        return
+
+    if allowed:
+        for (content_type, name, group) in user._group_perm_origin:
+            owned = "%s.%s" % (content_type, name)
+            if perm == owned:
+                user._perm_trace.append(dict(
+                    perm=perm,
+                    allowed=allowed,
+                    granted_by=group,
+                ))
+    else:
+        user._perm_trace.append(dict(
+                    perm=perm,
+                    allowed=allowed,
+                    granted_by=None,
+                ))
 
 
 def has_view_perm(user, perm, obj=None):
@@ -257,8 +285,8 @@ def get_groups_query_filters(user, **kwargs):
     This function generates the query filters for a list of groups that
     the user has the CHANGE (EDIT) permission.
 
-    For example, for the group dropdown on newsletters generator, 
-      only those groups that the user can change will show up. 
+    For example, for the group dropdown on newsletters generator,
+      only those groups that the user can change will show up.
     """
     if not isinstance(user, User) or user.is_anonymous:
         return Q()

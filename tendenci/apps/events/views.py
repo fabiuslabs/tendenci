@@ -87,7 +87,8 @@ from tendenci.apps.events.models import (
     RegistrationConfiguration,
     EventPhoto,
     Place,
-    RecurringEvent)
+    RecurringEvent,
+    Volunteer)
 from tendenci.apps.events.forms import (
     EventForm,
     Reg8nEditForm,
@@ -98,6 +99,7 @@ from tendenci.apps.events.forms import (
     SponsorForm,
     TypeForm,
     MessageAddForm,
+    MessageVolunteerAddForm,
     RegistrationForm,
     RegistrantForm,
     FreePassCheckForm,
@@ -123,9 +125,12 @@ from tendenci.apps.events.forms import (
     EventSimpleSearchForm,
     EventReportFilterForm,
     GratuityForm,
-    management_forms_tampered)
+    management_forms_tampered,
+    VolunteerForm,
+    EventVolunteerSearchForm)
 from tendenci.apps.events.utils import (
     email_registrants,
+    email_volunteers,
     render_event_email,
     get_default_reminder_template,
     add_registration,
@@ -241,7 +246,7 @@ def details(request, id=None, private_slug=u'', template_name="events/view.html"
     organizer = None
     if organizers:
         organizer = organizers[0]
-        
+
     [sponsor] = event.sponsor_set.all().order_by('pk')[:1] or [None]
 
     event_ct = event.content_type()
@@ -380,7 +385,7 @@ def search(request, redirect=False, past=False, template_name="events/search.htm
     national_only = None
     state = None
     with_registration = None
-    
+
     if form.is_valid():
         with_registration = form.cleaned_data.get('registration', None)
         event_type = form.cleaned_data.get('event_type', None)
@@ -446,7 +451,7 @@ def search(request, redirect=False, past=False, template_name="events/search.htm
         events = [event for event in events if event in myevents]
 
     EventLog.objects.log()
-    
+
     if get_setting('module', 'events', 'gridview_for_listview'):
         base_template = 'events/base-wide.html'
         num_per_page = 25
@@ -472,7 +477,7 @@ def search(request, redirect=False, past=False, template_name="events/search.htm
 def templates_list(request, template_name="events/templates_list.html"):
     filters = get_query_filters(request.user, 'events.change_event')
     events = Event.objects.get_queryset_templates().filter(filters).distinct()
-    
+
     return render_to_resp(request=request, template_name=template_name, context={
         'events': events,
         })
@@ -506,7 +511,7 @@ def icalendar(request):
             ics_str = ics.read()
             ics.close()
     if not ics_str:
-        ics_str = "BEGIN:VCALENDAR\r\n"  
+        ics_str = "BEGIN:VCALENDAR\r\n"
         ics_str += "PRODID:-//Tendenci - The Open Source AMS for Associations//Tendenci 12 MIMEDIR//EN\r\n"
         ics_str += "VERSION:2.0\r\n"
         ics_str += "METHOD:PUBLISH\r\n"
@@ -527,7 +532,7 @@ def icalendar(request):
 def icalendar_single(request, id, guid=''):
     reg8n_guid = guid
     reg8n_id = request.GET.get('reg8n_id')
-    
+
     p = re.compile(r'http(s)?://(www.)?([^/]+)')
     d = {'reg8n_guid': reg8n_guid,
          'reg8n_id': reg8n_id}
@@ -579,7 +584,10 @@ def print_view(request, id, template_name="events/print-view.html"):
 def edit(request, id, form_class=EventForm, template_name="events/edit.html"):
     event = get_object_or_404(Event.objects.get_all(), pk=id)
 
-    if not has_perm(request.user,'events.change_event', event):
+    if not has_perm(request.user, 'events.change_event', event):
+        raise Http403
+
+    if not shares_group(event, request.user):
         raise Http403
 
     if request.method == "POST":
@@ -841,7 +849,7 @@ def sponsor_edit(request, id, form_class=SponsorForm, template_name="events/edit
     form_sponsor = form_class(request.POST or None, instance=sponsor, prefix='sponsor')
 
     if request.method == "POST":
-        
+
         post_data = request.POST
         if 'apply_changes_to' not in post_data:
             post_data = {'apply_changes_to':'self'}
@@ -1221,7 +1229,10 @@ def pricing_edit(request, id, form_class=Reg8nConfPricingForm, template_name="ev
 def edit_meta(request, id, form_class=MetaForm, template_name="events/edit-meta.html"):
     # check permission
     event = get_object_or_404(Event, pk=id)
-    if not has_perm(request.user,'events.change_event',event):
+    if not has_perm(request.user, 'events.change_event', event):
+        raise Http403
+
+    if not shares_group(event, request.user):
         raise Http403
 
     defaults = {
@@ -1449,7 +1460,7 @@ def add(request, year=None, month=None, day=None, is_template=False,
 
                 organizer.event.set([event])
                 organizer.save() # save again
-                
+
                 sponsor.event.set([event])
                 sponsor.save()
 
@@ -1577,7 +1588,7 @@ def add(request, year=None, month=None, day=None, is_template=False,
             # label the form sets
             form_speaker.label = _("Speaker(s)")
             form_regconfpricing.label = _("Pricing(s)")
-        
+
         # response
         return render_to_resp(request=request, template_name=template_name,
             context={
@@ -1603,43 +1614,46 @@ def delete(request, id, template_name="events/delete.html"):
     event = get_object_or_404(Event.objects.get_all(), pk=id)
     is_template = event.status_detail == 'template'
 
-    if has_perm(request.user, 'events.delete_event'):
-        if request.method == "POST":
-
-            eventlog = EventLog.objects.log(instance=event)
-            if eventlog:
-                eventlog_url = reverse('event_log', args=[eventlog.pk])
-            else:
-                eventlog_url = ''
-            # send email to admins
-            recipients = get_notice_recipients('site', 'global', 'allnoticerecipients')
-            if recipients and notification:
-                notification.send_emails(recipients, 'event_deleted', {
-                    'event': event,
-                    'request': request,
-                    'user': request.user,
-                    'registrants_paid': event.registrants(with_balance=False),
-                    'registrants_pending': event.registrants(with_balance=True),
-                    'eventlog_url': eventlog_url,
-                    'SITE_GLOBAL_SITEDISPLAYNAME': get_setting('site', 'global', 'sitedisplayname'),
-                    'SITE_GLOBAL_SITEURL': get_setting('site', 'global', 'siteurl'),
-                })
-
-            if event.image:
-                event.image.delete()
-
-            event.delete(log=False)
-            msg_string = 'Successfully deleted %s' % str(event)
-            messages.add_message(request, messages.SUCCESS, _(msg_string))
-
-            if is_template:
-                return HttpResponseRedirect(reverse('event.templates_list'))
-            return HttpResponseRedirect(reverse('event.search'))
-
-        return render_to_resp(request=request, template_name=template_name,
-            context={'event': event})
-    else:
+    if not has_perm(request.user, 'events.delete_event', event):
         raise Http403
+
+    if not shares_group(event, request.user):
+        raise Http403
+
+    if request.method == "POST":
+
+        eventlog = EventLog.objects.log(instance=event)
+        if eventlog:
+            eventlog_url = reverse('event_log', args=[eventlog.pk])
+        else:
+            eventlog_url = ''
+        # send email to admins
+        recipients = get_notice_recipients('site', 'global', 'allnoticerecipients')
+        if recipients and notification:
+            notification.send_emails(recipients, 'event_deleted', {
+                'event': event,
+                'request': request,
+                'user': request.user,
+                'registrants_paid': event.registrants(with_balance=False),
+                'registrants_pending': event.registrants(with_balance=True),
+                'eventlog_url': eventlog_url,
+                'SITE_GLOBAL_SITEDISPLAYNAME': get_setting('site', 'global', 'sitedisplayname'),
+                'SITE_GLOBAL_SITEURL': get_setting('site', 'global', 'siteurl'),
+            })
+
+        if event.image:
+            event.image.delete()
+
+        event.delete(log=False)
+        msg_string = 'Successfully deleted %s' % str(event)
+        messages.add_message(request, messages.SUCCESS, _(msg_string))
+
+        if is_template:
+            return HttpResponseRedirect(reverse('event.templates_list'))
+        return HttpResponseRedirect(reverse('event.search'))
+
+    return render_to_resp(request=request, template_name=template_name,
+        context={'event': event})
 
 
 @is_enabled('events')
@@ -1647,11 +1661,14 @@ def delete(request, id, template_name="events/delete.html"):
 def delete_recurring(request, id, template_name="events/delete_recurring.html"):
     event = get_object_or_404(Event, pk=id)
 
-    if not has_perm(request.user,'events.delete_event'):
+    if not has_perm(request.user, 'events.delete_event'):
         raise Http403
 
     if not event.is_recurring_event:
         raise Http404
+
+    if not shares_group(event, request.user):
+        raise Http403
 
     event_list = event.recurring_event.event_set.all()
     if request.method == "POST":
@@ -2003,7 +2020,7 @@ def register(request, event_id=0,
     if (request.method == 'POST') and management_forms_tampered(formsets=[registrant, addon_formset]):
         # our forms has been tampered, maliciously likely
         return HttpResponseRedirect(reverse('event.register', args=[event.pk]))
-    
+
 
     # REGISTRATION form
     if request.method != 'POST' or registrant.is_valid():
@@ -2162,7 +2179,7 @@ def register(request, event_id=0,
                             form.discount = discount_list[i]
                             form.final_price = amount_list[i]
                             subtotal += form.final_price
-                        
+
                         flat_registrants.append(form)
                         if not is_table:
                             total_tax += tax_list[i]
@@ -2203,7 +2220,7 @@ def register(request, event_id=0,
     if request.method == 'POST' and addon_formset.is_valid():
         addons_price = addon_formset.get_total_price()
         total_price += addons_price
-    
+
     if is_table:
         subtotal = total_price
         if discount_applied:
@@ -2244,6 +2261,131 @@ def register(request, event_id=0,
         'add_more_registrants' : add_more_registrants,
         'flat_ignore_fields' : flat_ignore_fields,
         'currency_symbol' : get_setting("site", "global", "currencysymbol") or '$'
+    })
+
+
+@is_enabled('events')
+@login_required
+def volunteer(request, event_id=0, template_name="events/reg8n/volunteer.html"):
+    event = get_object_or_404(Event, pk=event_id)
+
+    # check if event allows volunteer
+    if not event.volunteer_enabled:
+        raise Http404
+
+    post_data = request.POST or None
+
+    params = {}
+
+    # Setting the initial or post data
+    if request.method != 'POST':
+        # set the initial data
+        initial = {
+            'first_name': request.user.first_name,
+            'last_name': request.user.last_name,
+            'email': request.user.email,
+            'event': event,
+            'user': request.user,
+        }
+        profile = request.user.profile
+        if profile:
+            initial.update({'company_name': profile.company,
+                            'phone': profile.phone})
+
+        params.update({"initial": initial})
+
+        post_data = None
+
+    form = VolunteerForm(post_data or None, **params)
+
+    do_confirmation = False
+    ignore_fields = ['event', 'user']
+
+    if request.method == 'POST':
+        if 'commit' in request.POST:
+
+            if form.is_valid():
+
+                if 'confirmed' in request.POST:
+                    if not Volunteer.objects.filter(event=event, user=request.user).exists():
+                        volunteer = form.save()
+
+                        site_label = get_setting('site', 'global', 'sitedisplayname')
+                        site_url = get_setting('site', 'global', 'siteurl')
+
+                        notification.send_emails(
+                            [volunteer.user.email],
+                            'event_volunteer_confirmation',
+                            {
+                                'SITE_GLOBAL_SITEDISPLAYNAME': site_label,
+                                'SITE_GLOBAL_SITEURL': site_url,
+                                'volunteer': volunteer,
+                                'event': event,
+                            },
+                            True,  # save notice in db
+                        )
+
+                        # log an event
+                        EventLog.objects.log(instance=event)
+
+                    else:
+                        volunteer = Volunteer.objects.get(event=event, user=request.user)
+
+                        msg_string = 'You were already volunteered on %s' % date_filter(volunteer.create_dt)
+                        messages.add_message(request, messages.INFO, _(msg_string))
+
+                    return HttpResponseRedirect(reverse(
+                        'event.search',
+                    ))
+                else:
+                    do_confirmation = True
+
+    return render_to_resp(request=request, template_name=template_name, context={
+        'event': event,
+        'form': form,
+        'ignore_fields': ignore_fields,
+        'do_confirmation': do_confirmation,
+    })
+
+
+@is_enabled('events')
+@login_required
+def volunteer_search(request, event_id=0, template_name='events/volunteers/search.html'):
+    search_criteria = None
+    search_text = None
+    search_method = None
+
+    event = get_object_or_404(Event, pk=event_id)
+
+    if not has_perm(request.user, 'events.view_volunteer'):
+        raise Http403
+
+    form = EventVolunteerSearchForm(request.GET)
+    if form.is_valid():
+        search_criteria = form.cleaned_data.get('search_criteria')
+        search_text = form.cleaned_data.get('search_text')
+        search_method = form.cleaned_data.get('search_method')
+
+    volunteers = Volunteer.objects.filter(event=event)
+    active_volunteers = volunteers.count()
+
+    if search_criteria and search_text:
+        search_type = '__iexact'
+        if search_method == 'starts_with':
+            search_type = '__istartswith'
+        elif search_method == 'contains':
+            search_type = '__icontains'
+
+        search_filter = {'%s%s' % (search_criteria, search_type): search_text}
+        volunteers = volunteers.filter(**search_filter)
+
+    EventLog.objects.log(instance=event)
+
+    return render_to_resp(request=request, template_name=template_name, context={
+        'event': event,
+        'volunteers': volunteers,
+        'active_volunteers': active_volunteers,
+        'form': form,
     })
 
 
@@ -2648,7 +2790,7 @@ def registration_edit(request, reg8n_id=0, hash='', template_name="events/reg8n/
         fields=('salutation', 'first_name', 'last_name', 'mail_name', 'email',
                     'position_title', 'company_name', 'phone', 'address', 'city',
                     'state', 'zip', 'country', 'meal_option', 'comments')
-        fields = [field_name for field_name in fields 
+        fields = [field_name for field_name in fields
                      if ((get_setting('module', 'events', 'regform_%s_visible' % field_name) and field_name != 'zip')\
                         or (field_name == 'zip' and get_setting('module', 'events', 'regform_zip_code_visible')))]
         # use modelformset_factory for regular registration form
@@ -2920,7 +3062,7 @@ def month_view(request, year=None, month=None, type=None, template_name='events/
             # use HttpCustomResponseRedirect to check if event
             # exists in redirects module
             return HttpCustomResponseRedirect(reverse('event.month'))
-    
+
     form = EventMonthForm(request.POST or None, user=request.user)
     if request.method == 'POST' and form.is_valid():
         search_text = form.cleaned_data['search_text']
@@ -2963,7 +3105,7 @@ def month_view(request, year=None, month=None, type=None, template_name='events/
     if year <= 1900 or year >= 9999:
         raise Http404
 
-    if month < 1 or month > 12: 
+    if month < 1 or month > 12:
         raise Http404
 
     calendar.setfirstweekday(calendar.SUNDAY)
@@ -3239,7 +3381,7 @@ def types(request, template_name='events/types/index.html'):
         formset = TypeFormSet(request.POST)
         if formset.is_valid():
             formset.save()
-            
+
             types_added = []
             types_edited = []
             types_deleted = []
@@ -3258,13 +3400,13 @@ def types(request, template_name='events/types/index.html'):
             for event_type in formset.deleted_objects:
                 types_deleted.append(event_type.name)
                 EventLog.objects.log(event_type="delete", instance=event_type)
-            
+
             msg_string = ''
-            if types_added:   
+            if types_added:
                 msg_string += _('Successfully added {}. ').format(','.join(types_added))
-            if types_edited:   
+            if types_edited:
                 msg_string += _('Successfully changed {}. ').format(','.join(types_edited))
-            if types_deleted:   
+            if types_deleted:
                 msg_string += _('Successfully deleted {}. ').format(','.join(types_deleted))
             if msg_string:
                 messages.add_message(request, messages.SUCCESS, msg_string)
@@ -3345,6 +3487,9 @@ def registrant_search(request, event_id=0, template_name='events/registrants/sea
     if not (has_perm(request.user,'events.view_registrant') or has_perm(request.user,'events.change_event', event)):
         raise Http403
 
+    if not shares_group(event, request.user):
+        raise Http403
+
     form = EventRegistrantSearchForm(request.GET)
     if form.is_valid():
         search_criteria = form.cleaned_data.get('search_criteria')
@@ -3399,6 +3544,9 @@ def registrant_roster(request, event_id=0, roster_view='', template_name='events
     discount_available = event.registration_configuration.discount_eligible
 
     if not (has_perm(request.user, 'events.view_registrant') or has_perm(request.user, 'events.change_event', event)):
+        raise Http403
+
+    if not shares_group(event, request.user):
         raise Http403
 
     sort_order = request.GET.get('sort_order', 'last_name')
@@ -3675,8 +3823,7 @@ def registration_confirmation(request, id=0, reg8n_id=0, hash='',
 
         # permission denied; if not given explicit permission or not registrant
         if not any((is_permitted, is_registrant)):
-            if not (request.user.is_authenticated and registration.allow_adjust_invoice_by(request.user)):
-                raise Http403
+            raise Http403
 
         registrant = registration.registrant
 
@@ -3796,6 +3943,79 @@ def message_add(request, event_id, form_class=MessageAddForm, template_name='eve
         'event':event,
         'form': form
         })
+
+
+@login_required
+def message_to_volunteers_add(request, event_id, form_class=MessageVolunteerAddForm,
+                              template_name='events/message_to_volunteers/add.html'):
+    from tendenci.apps.emails.models import Email
+    event = get_object_or_404(Event, pk=event_id)
+    if not has_perm(request.user, 'events.change_event', event): raise Http403
+
+    if request.method == "POST":
+        email = Email()
+        form = form_class(event.id, request.POST, instance=email)
+
+        if form.is_valid():
+
+            email.sender = get_setting('site', 'global', 'siteemailnoreplyaddress')
+
+            email.sender_display = request.user.get_full_name()
+            email.reply_to = request.user.email
+            email.recipient = request.user.email
+            email.content_type = "html"
+            email.save(request.user)
+            subject = email.subject
+
+            # replace relative to absolute urls
+            site_url = get_setting('site', 'global', 'siteurl')
+            email.body = email.body.replace("src=\"/", "src=\"%s/" % site_url)
+            email.body = email.body.replace("href=\"/", "href=\"%s/" % site_url)
+
+            volunteer_kwargs = {}
+            email_volunteers(event, email, **volunteer_kwargs)
+
+            volunteer_kwargs['summary'] = '<font face=""Arial"" color=""#000000"">'
+            volunteer_kwargs['summary'] += 'Emails sent as a result of Calendar Event Notification</font><br><br>'
+            volunteer_kwargs['summary'] += '<font face=""Arial"" color=""#000000"">'
+            volunteer_kwargs['summary'] += '<br><br>Email Sent Appears Below in Raw Format'
+            volunteer_kwargs['summary'] += '</font><br><br>'
+            volunteer_kwargs['summary'] += email.body
+
+            # send summary
+            email.subject = 'SUMMARY: %s' % email.subject
+            email.body = volunteer_kwargs['summary']
+            email.recipient = request.user.email
+            email.send()
+
+            # send another copy to the site webmaster
+            """
+            email.recipient = get_setting('site', 'global', 'sitewebmasteremail')
+            if email.recipient:
+                email.subject = 'WEBMASTER SUMMARY: %s' % email.subject
+                email.body = '<h2>Site Webmaster Notification of Calendar Event Send</h2>%s' % email.body
+                email.send()
+            """
+
+            EventLog.objects.log(instance=email)
+            msg_string = 'Successfully sent email "%s" to event volunteers for event "%s".' % (subject, event.title)
+            messages.add_message(request, messages.SUCCESS, msg_string)
+
+            return HttpResponseRedirect(reverse('event', args=([event_id])))
+
+    else:
+        defaultsubject = render_to_string(template_name='events/message_to_volunteers/subject-text.txt',
+                                          context={'event': event},
+                                          request=request)
+        openingtext = render_to_string(template_name='events/message_to_volunteers/opening-text.txt',
+                                       context={'event': event},
+                                       request=request)
+        form = form_class(event.id, initial={'subject': defaultsubject, 'body': openingtext})
+
+    return render_to_resp(request=request, template_name=template_name, context={
+        'event': event,
+        'form': form
+    })
 
 
 @login_required
@@ -4814,7 +5034,7 @@ def reports_financial(request, template_name="events/financial_reports.html"):
             # log an event
             EventLog.objects.log()
             return HttpResponseRedirect(reverse('event.reports.financial.export_status', args=[identifier]))
-            
+
         events = form.filter(queryset=events)
         sort_by = form.cleaned_data.get('sort_by') or 'start_dt'
         sort_direction = form.cleaned_data.get('sort_direction')
@@ -4862,5 +5082,12 @@ def financial_export_download(request, identifier):
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="events_financial_export_%s"' % file_name
     response.content = default_storage.open(file_path).read()
-    return response 
-    
+    return response
+
+
+def shares_group(event, user):
+    if user.is_superuser:
+        return True
+
+    group_union = set(event.groups.all()) & set(user.user_groups.all())
+    return len(group_union) > 0

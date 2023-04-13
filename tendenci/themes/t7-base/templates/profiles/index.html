@@ -59,17 +59,18 @@
               {% gravatar user_this 128 %}
               {% endif %}
             </div>
-            
             <div class="col-sm-10">
               {% if can_edit or request.user.id == user_this.id  %}
               <div class="pull-right">
-              <a class="btn btn-default" href="{% url "profile.edit" user_this.id %}">{% trans "Edit Profile" %}</a>
-              {% if user_this == request.user %}
-              <a href="{% url 'profile.upload_photo' %}" class="btn btn-default">Update My Profile Picture</a>
-              {% else %}
-              <a href="{% url 'profile.upload_photo' user_this.id %}" class="btn btn-default">Update Profile Picture</a>
-              {% endif %}
-              </div>
+                <a class="btn btn-default" href="{% url "profile.edit" user_this.id %}">{% trans "Edit Profile" %}</a>
+                {% if profile.chapter_memberships %}
+                  {% if user_this == request.user %}
+                    <a href="{% url "chapters.detail" chapter_slug %}" class="btn btn-default">Go to My Chapter</a>
+                  {% else %}
+                    <a href="{% url "chapters.detail" chapter_slug %}" class="btn btn-default">Go to User's Chapter</a>
+                  {% endif %}
+                {% endif %}
+                </div>
               {% endif %}
               {% if profile.display_name %}
               <h1>{% firstof profile.display_name %}</h1>
@@ -118,14 +119,7 @@
               <td>{% trans 'Username' %}</td>
               <td>{{ profile.user.username }}</td>
             </tr>
-
-            {% if profile.account_id %}
-            <tr>
-              <td>{% trans 'Account ID' %}</td>
-              <td>{{ profile.account_id }}</td>
-            </tr>
-            {% endif %}
-
+            
             {% if can_edit or not profile.hide_email %}
             <tr>
               <td>{% trans 'Email' %}</td>

@@ -106,6 +106,7 @@ CLASS_AND_WIDGET = {
 
 def assign_search_fields(form, app_field_objs):
     for obj in app_field_objs:
+        print(obj, "obj")
         # either choice field or text field
         if obj.field_name and obj.field_type not in ['BooleanField']:
             if obj.field_name == 'time_zone':
@@ -267,7 +268,6 @@ class MembershipTypeForm(TendenciBaseForm):
             if expiration_grace_period > renewal_period_end:
                 raise forms.ValidationError(_("The Expiration Grace Period should be less than or equal to the Renewal Period End."))
         return cleaned_data
-
 
     def clean_expiration_grace_period(self):
         value = self.cleaned_data['expiration_grace_period']
@@ -653,8 +653,8 @@ def get_field_size(app_field_obj):
 def assign_fields(form, app_field_objs):
     # a list of names of app fields
     field_names = [field.field_name for field in app_field_objs
-                   if field.field_name != '' and
-                   field.field_name in form.fields]
+                   if field.field_name != ''
+                   and field.field_name in form.fields]
 
     for name in list(form.fields):
         if name not in field_names and name != 'discount_code':
@@ -728,6 +728,7 @@ class UserForm(FormControlWidgetMixin, forms.ModelForm):
 
         assign_fields(self, app_field_objs)
         self_fields_keys = list(self.fields.keys())
+        print(self_fields_keys, "self_fields_keys")
 
         self.is_renewal = 'username' in self.request.GET
         if (self.request.user.is_superuser and self.is_renewal) or (self.instance and self.instance.pk):
@@ -857,30 +858,37 @@ class UserForm(FormControlWidgetMixin, forms.ModelForm):
                 # we didn't find user, check if email address is already in use
                 if email:
                     # Fixing an issue here - when an email address in the db has a trailing space,
-                    # a match cannot be found with the same email address. As an result, 
+                    # a match cannot be found with the same email address. As an result,
                     # an IntegrityError could occur when a new user record is being created.
                     if User.objects.filter(username=email).exists():
                         u = User.objects.get(username=email)
                         if u.email.strip().replace(' ', '') != u.email:
                             u.email = u.email.strip().replace(' ', '')
                             u.save()
-  
+
                     if User.objects.filter(email__iexact=email).exists():
                         if self.request.user.is_authenticated:
                             # user is logged in
                             if 'username' in data:
                                 # username is presented on form
                                 raise forms.ValidationError(_('This email "%s" is taken. Please check username or enter a different email address.') % email)
+                        """ Unnecessary block
                         else:
                             # user is not logged in. prompt them to log in if the user record with this email address is active
                             u = User.objects.filter(email__iexact=email).order_by('-is_active')[0]
                             [profile] = Profile.objects.filter(user=u)[:1] or [None]
-                            if (profile and profile.is_active) and u.is_active:
-                                raise forms.ValidationError(email_validate_err_msg)
+                            
+                            # comment out to skip error message when trying sign up after already membership
+                            # if (profile and profile.is_active) and u.is_active:
+                                # raise forms.ValidationError(email_validate_err_msg)
 
                             # at this point, user is not logged in and user record with this email is inactive
                             # let them activate the account before applying for membership
-                            raise forms.ValidationError(inactive_user_err_msg)
+                            
+                            # comment out to skip error message of activation request when signing up for membership
+                            # for example, newsletter subscriber user has inactive status
+                            # raise forms.ValidationError(inactive_user_err_msg)
+                        """
 
         return data
 
@@ -1015,7 +1023,7 @@ class EducationForm(FormControlWidgetMixin, forms.Form):
         if app_field_objs:
             assign_fields(self, app_field_objs)
         self.field_names = [name for name in self.fields]
-        
+
         # If none Education fields are presented on the form, clear fields from the
         # EducationForm to prevent the existing education data from being wipped out.
         if app_field_objs and app_field_objs.filter(field_name__in=['school1', 'major1', 'degree1', 'graduation_dt1',
@@ -1106,12 +1114,15 @@ class DemographicsForm(FormControlWidgetMixin, forms.ModelForm):
         self.request = kwargs.pop('request', None)
         self.membership = kwargs.pop('membership', None)
         super(DemographicsForm, self).__init__(*args, **kwargs)
-        
+
         self.field_names = [name for name in self.fields]
+        self.file_upload_fields = {}
         # change the default widget to TextInput instead of TextArea
         for key, field in self.fields.items():
             if field.widget.__class__.__name__.lower() == 'textarea':
                 field.widget = forms.widgets.TextInput({'size': 30})
+            if 'fileinput' in field.widget.__class__.__name__.lower():
+                self.file_upload_fields.update({key:field})
             if field.widget.__class__.__name__.lower() == 'selectdatewidget':
                 field.widget.years = list(range(1920, THIS_YEAR + 10))
 
@@ -1119,12 +1130,6 @@ class DemographicsForm(FormControlWidgetMixin, forms.ModelForm):
         # Moved down here otherwise the widget would be overridden by
         # the above code which sets the default widget to TextInput
         assign_fields(self, app_field_objs)
-
-        # this section needs to be here, otherwise the 'fileinput' has been assigned yet.
-        self.file_upload_fields = {}
-        for key, field in self.fields.items():
-            if 'fileinput' in field.widget.__class__.__name__.lower():
-                self.file_upload_fields.update({key:field})
 
         self.app = None
         self.demographics = None
@@ -1152,7 +1157,7 @@ class DemographicsForm(FormControlWidgetMixin, forms.ModelForm):
                         self.fields[field_name].initial = getattr(self.demographics, field_name)
 
         self.add_form_control_class()
-        
+
     def assign_file_perms(self, file_instance):
         """
         Assign permissions for the uploaded file.
@@ -1163,7 +1168,7 @@ class DemographicsForm(FormControlWidgetMixin, forms.ModelForm):
         file_instance.allow_user_view = False
         file_instance.allow_member_view = False
         file_instance.is_public = False
-        
+
         if member_protection == 'public':
             file_instance.allow_anonymous_view = True
             file_instance.is_public = True
@@ -1279,7 +1284,7 @@ class MembershipDefault2Form(FormControlWidgetMixin, forms.ModelForm):
             self.corp_app_authentication_method = ''
 
         super(MembershipDefault2Form, self).__init__(*args, **kwargs)
-        
+
         if 'industry' in self.fields:
             # the industry has been moved to profile
             del self.fields['industry']
@@ -1655,14 +1660,13 @@ class ReportForm(forms.Form):
 
 
 class MembershipDefaultForm(TendenciBaseForm):
+
     """
     Bound to the MembershipDefault model
     """
-
     salutation = forms.CharField(required=False)
     first_name = forms.CharField(initial=u'')
     last_name = forms.CharField(initial=u'')
-    account_id = forms.IntegerField(required=False)
     email = forms.CharField(initial=u'')
     email2 = forms.CharField(initial=u'', required=False)
     display_name = forms.CharField(initial=u'', required=False)
@@ -1706,6 +1710,8 @@ class MembershipDefaultForm(TendenciBaseForm):
     career_end_dt = forms.DateTimeField(required=False)
 
     sex = forms.CharField(label=_('Gender'), initial=u'', required=False)
+    print(vars(forms), "the forms are")
+    # chapter
     spouse = forms.CharField(initial=u'', required=False)
     profession = forms.CharField(initial=u'', required=False)
     custom1 = forms.CharField(initial=u'', required=False)
@@ -1801,7 +1807,6 @@ class MembershipDefaultForm(TendenciBaseForm):
             'directory_type',
             'application_approved',
             'payment_method',
-            'chapter',
             'areas_of_expertise',
             'corporate_membership_id',
             'home_state',
@@ -1914,7 +1919,6 @@ class MembershipDefaultForm(TendenciBaseForm):
             ]
 
             profile_attrs = [
-                'account_id',
                 'email2',
                 'industry',
                 'company',
@@ -2267,7 +2271,6 @@ class MembershipDefaultForm(TendenciBaseForm):
         # profile.display_name = self.cleaned_data.get('display_name', u'')
         profile_attrs = [
             'display_name',
-            'account_id',
             'industry',
             'company',
             'position_title',

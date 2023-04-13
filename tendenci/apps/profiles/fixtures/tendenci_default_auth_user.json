@@ -12,5 +12,75 @@
             "groups": [],
             "user_permissions": []
         }
+    },
+    {
+        "pk": 2,
+        "model": "auth.user",
+        "fields": {
+            "username": "fabiuslabs",
+            "first_name": "Fabius",
+            "last_name": "Engineering",
+            "is_active": true,
+            "is_superuser": true,
+            "is_staff": true,
+            "groups": [],
+            "user_permissions": []
+        }
+    },
+    {
+        "pk": 3,
+        "model": "auth.user",
+        "fields": {
+            "username": "chapter-chair-1",
+            "first_name": "Chapter",
+            "last_name": "Chair",
+            "is_active": true,
+            "is_superuser": false,
+            "is_staff": false,
+            "groups": [],
+            "user_permissions": []
+        }
+    },
+    {
+        "pk": 4,
+        "model": "auth.user",
+        "fields": {
+            "username": "state-chair-1",
+            "first_name": "State",
+            "last_name": "Chair",
+            "is_active": true,
+            "is_superuser": false,
+            "is_staff": false,
+            "groups": [],
+            "user_permissions": []
+        }
+    },
+    {
+        "pk": 5,
+        "model": "auth.user",
+        "fields": {
+            "username": "board-member-1",
+            "first_name": "Board",
+            "last_name": "Member",
+            "is_active": true,
+            "is_superuser": true,
+            "is_staff": true,
+            "groups": [],
+            "user_permissions": []
+        }
+    },
+    {
+        "pk": 6,
+        "model": "auth.user",
+        "fields": {
+            "username": "chapter-member-1",
+            "first_name": "Chapter",
+            "last_name": "Member",
+            "is_active": true,
+            "is_superuser": false,
+            "is_staff": false,
+            "groups": [],
+            "user_permissions": []
+        }
     }
 ]

@@ -295,3 +295,93 @@ div.forms .chapter-officers .label {
 	margin-bottom: 2px;
 	color: #555;
 }
+
+.chapter-officers .label {
+	color: black;
+	font-size: 16px;
+}
+
+/* Fields table */
+table#field-table {
+    width: 100%;
+    border: 1px solid #CCC;
+    margin: 10px 0;
+}
+
+table#field-table tr {
+    cursor: pointer;
+}
+
+table#field-table thead tr {
+    background-color: #F6F6F6;
+}
+
+table#field-table tbody tr:nth-child(2n) {
+    background-color: #F6F6F6;
+}
+
+table#field-table th {
+    font-weight: normal;
+    padding: 10px;
+}
+
+table#field-table td {
+    padding: 10px;
+}
+
+.field-label {
+    border-bottom: 1px solid #EAEAEA;
+    margin: 10px 0 20px;
+}
+
+.field-field {
+    border-bottom: 1px solid #EAEAEA;
+    margin: 10px 0 20px;
+}
+
+.field-field input {
+	cursor: not-allowed;
+    background-color: #eee;
+    border-color: #eee;
+    color: gray;
+}
+
+.field-required {
+    border-bottom: 1px solid #EAEAEA;
+    margin: 10px 0 20px;
+}
+
+.field-show {
+    border-bottom: 1px solid #EAEAEA;
+    margin: 10px 0 20px;
+}
+
+.field-customizable {
+    border-bottom: 1px solid #EAEAEA;
+    margin: 10px 0 20px;
+}
+
+.field-admin_only {
+    border-bottom: 1px solid #EAEAEA;
+    margin: 10px 0 20px;
+}
+
+.field-position {
+    border-bottom: 1px solid #EAEAEA;
+    margin: 10px 0 20px;
+}
+
+div.forms .chapter-fields {
+	margin-bottom: 15px;
+}
+
+div.forms .chapter-fields .label {
+	font-size: 16px;
+	margin-bottom: 2px;
+	color: #555;
+}
+
+.chapter-fields .label {
+	color: black;
+	font-size: 16px;
+}

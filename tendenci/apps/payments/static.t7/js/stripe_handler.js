@@ -1,1 +1,3 @@
-../../../../themes/t7-base/static/js/stripe_handler.js
+(function($) {
+
+}(jQuery));
